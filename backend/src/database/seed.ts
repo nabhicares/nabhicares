@@ -6,7 +6,7 @@ export class DatabaseSeeder implements OnApplicationBootstrap {
   constructor(private firestore: FirestoreService) {}
 
   async onApplicationBootstrap() {
-    if (process.env.SEED_ON_BOOT !== 'true') {
+    if (process.env.SEED_ON_BOOT?.trim() !== 'true') {
       console.log('[DatabaseSeeder] Seeding is gated by SEED_ON_BOOT. Skipping seed.');
       return;
     }
