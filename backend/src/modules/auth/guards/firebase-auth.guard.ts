@@ -14,10 +14,12 @@ export class FirebaseAuthGuard implements CanActivate {
     const token = authHeader.split('Bearer ')[1];
 
     try {
-      const isMockMode = 
+      const isMockAllowed = process.env.NODE_ENV !== 'production' && (
         !process.env.FIREBASE_PRIVATE_KEY || 
-        process.env.FIREBASE_PRIVATE_KEY.includes('MOCK_KEY') ||
-        token.startsWith('mock-');
+        process.env.FIREBASE_PRIVATE_KEY.includes('MOCK_KEY')
+      );
+
+      const isMockMode = isMockAllowed && token.startsWith('mock-');
       
       if (isMockMode) {
         // Parse custom mock roles directly from token for developer testing

@@ -60,15 +60,21 @@ export class InventoryController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('type') type?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.inventoryService.findTransactions(medicineId, from, to, type);
+    return this.inventoryService.findTransactions(medicineId, from, to, type, page, limit);
   }
 
   @Get('medicines/:id/transactions')
   @Roles('super_admin', 'hospital_admin', 'pharmacist')
   @ApiOperation({ summary: 'Get audit transaction history for a specific medicine SKU' })
-  getMedicineTransactions(@Param('id') id: string) {
-    return this.inventoryService.findTransactions(id);
+  getMedicineTransactions(
+    @Param('id') id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.inventoryService.findTransactions(id, undefined, undefined, undefined, page, limit);
   }
 
   @Get('medicines/:id')

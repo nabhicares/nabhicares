@@ -133,6 +133,9 @@ export class InventoryService {
         throw new NotFoundException(`Medicine with ID ${medicineId} does not exist.`);
       }
       const medData = medDoc.data()!;
+      if (medData.status === 'inactive') {
+        throw new BadRequestException(`Cannot add batch to inactive medicine SKU: ${medData.name}.`);
+      }
 
       const batchRef = medRef.collection('batches').doc(dto.batchNo);
       const batchDoc = await transaction.get(batchRef);
@@ -188,6 +191,9 @@ export class InventoryService {
         throw new NotFoundException(`Medicine with ID ${medicineId} does not exist.`);
       }
       const medData = medDoc.data()!;
+      if (medData.status === 'inactive') {
+        throw new BadRequestException(`Cannot adjust stock for inactive medicine SKU: ${medData.name}.`);
+      }
 
       const batchRef = medRef.collection('batches').doc(batchNo);
       const batchDoc = await transaction.get(batchRef);
@@ -307,7 +313,7 @@ export class InventoryService {
     return { lowStock, outOfStock, expiring };
   }
 
-  async findTransactions(medicineId?: string, from?: string, to?: string, type?: string) {
+  async findTransactions(medicineId?: string, from?: string, to?: string, type?: string, page = 1, limit = 10) {
     let query: any = this.firestore.collection('stockTransactions');
     
     if (medicineId) {
@@ -328,7 +334,21 @@ export class InventoryService {
     }
 
     list.sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt));
-    return list;
+
+    const pageNum = (page && !isNaN(Number(page)) && Number(page) > 0) ? Number(page) : 1;
+    const limitNum = (limit && !isNaN(Number(limit)) && Number(limit) > 0) ? Number(limit) : 10;
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = list.slice(startIndex, startIndex + limitNum);
+
+    return {
+      items: paginated,
+      meta: {
+        totalCount: list.length,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(list.length / limitNum),
+      },
+    };
   }
 
   async getInventorySummary() {

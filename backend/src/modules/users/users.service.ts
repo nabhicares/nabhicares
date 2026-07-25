@@ -77,13 +77,20 @@ export class UsersService {
   }
 
   async bootstrapUser(dto: UserBootstrapDto, secretHeader?: string) {
-    const bootstrapSecret = process.env.BOOTSTRAP_SECRET || 'CareFlowDefaultSecret2026';
+    const bootstrapSecret = process.env.BOOTSTRAP_SECRET;
+    const isProd = process.env.NODE_ENV === 'production';
+
+    if (isProd && !bootstrapSecret) {
+      throw new ForbiddenException('Bootstrap is locked down in production: BOOTSTRAP_SECRET environment variable is missing.');
+    }
+
+    const secretToCompare = bootstrapSecret || 'CareFlowLocalSecretKey_2026';
 
     const superAdminSnapshot = await this.firestore.collection('users')
       .where('role', '==', 'super_admin')
       .get();
     
-    if (!superAdminSnapshot.empty && secretHeader !== bootstrapSecret) {
+    if (!superAdminSnapshot.empty && secretHeader !== secretToCompare) {
       throw new ForbiddenException('Bootstrap is locked down. A valid secret header is required to register new users via bootstrap.');
     }
 

@@ -45,9 +45,25 @@ export class PurchasesService {
     return updated.data();
   }
 
-  async findAllSuppliers() {
+  async findAllSuppliers(includeInactive?: string, page = 1, limit = 10) {
     const snapshot = await this.firestore.collection('suppliers').get();
-    return snapshot.docs.map((doc) => doc.data());
+    let list = snapshot.docs.map((doc) => doc.data());
+    if (includeInactive !== 'true') {
+      list = list.filter((s: any) => s.status !== 'inactive');
+    }
+    const pageNum = (page && !isNaN(Number(page)) && Number(page) > 0) ? Number(page) : 1;
+    const limitNum = (limit && !isNaN(Number(limit)) && Number(limit) > 0) ? Number(limit) : 10;
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = list.slice(startIndex, startIndex + limitNum);
+    return {
+      items: paginated,
+      meta: {
+        totalCount: list.length,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(list.length / limitNum),
+      },
+    };
   }
 
   async createPurchaseOrder(dto: CreatePurchaseOrderDto) {
@@ -98,16 +114,36 @@ export class PurchasesService {
     if (!doc.exists) {
       throw new NotFoundException(`Purchase order with ID ${id} does not exist.`);
     }
-    if (doc.data()!.status === 'received') {
+    const orderData = doc.data()!;
+    if (orderData.status === 'received') {
       throw new BadRequestException('Cannot cancel a fully received purchase order.');
+    }
+    const hasAnyReceived = orderData.items.some((item: any) => (item.quantityReceived || 0) > 0);
+    if (hasAnyReceived) {
+      throw new BadRequestException('Cannot cancel a purchase order that has been partially received.');
     }
     await orderRef.update({ status: 'cancelled' });
     return { id, status: 'cancelled' };
   }
 
-  async getPurchaseOrders() {
+  async getPurchaseOrders(page = 1, limit = 10) {
     const snapshot = await this.firestore.collection('purchaseOrders').get();
-    return snapshot.docs.map((doc) => doc.data());
+    const list = snapshot.docs.map((doc) => doc.data());
+    
+    const pageNum = (page && !isNaN(Number(page)) && Number(page) > 0) ? Number(page) : 1;
+    const limitNum = (limit && !isNaN(Number(limit)) && Number(limit) > 0) ? Number(limit) : 10;
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = list.slice(startIndex, startIndex + limitNum);
+    
+    return {
+      items: paginated,
+      meta: {
+        totalCount: list.length,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(list.length / limitNum),
+      },
+    };
   }
 
   async receivePurchaseOrder(orderId: string, dto: ReceivePurchaseOrderDto) {
@@ -156,6 +192,9 @@ export class PurchasesService {
           throw new NotFoundException(`Medicine with ID ${recItem.medicineId} does not exist.`);
         }
         const medData = medDoc.data()!;
+        if (medData.status === 'inactive') {
+          throw new BadRequestException(`Cannot receive inventory for inactive medicine SKU: ${medData.name}.`);
+        }
 
         const batchRef = medRef.collection('batches').doc(recItem.batchNo);
         const batchDoc = await transaction.get(batchRef);

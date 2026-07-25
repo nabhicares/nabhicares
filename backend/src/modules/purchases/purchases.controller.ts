@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PurchasesService } from './purchases.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -26,8 +26,12 @@ export class PurchasesController {
   @Get('suppliers')
   @Roles('super_admin', 'hospital_admin', 'pharmacist')
   @ApiOperation({ summary: 'Retrieve list of all active suppliers' })
-  findAllSuppliers() {
-    return this.purchasesService.findAllSuppliers();
+  findAllSuppliers(
+    @Query('includeInactive') includeInactive?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.purchasesService.findAllSuppliers(includeInactive, page, limit);
   }
 
   @Get('suppliers/:id')
@@ -54,8 +58,11 @@ export class PurchasesController {
   @Get('orders')
   @Roles('super_admin', 'hospital_admin', 'pharmacist')
   @ApiOperation({ summary: 'Retrieve list of all purchase orders' })
-  getOrders() {
-    return this.purchasesService.getPurchaseOrders();
+  getOrders(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.purchasesService.getPurchaseOrders(page, limit);
   }
 
   @Get('orders/:id')

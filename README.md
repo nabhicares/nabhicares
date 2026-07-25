@@ -23,7 +23,7 @@ PORT=3000
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-client-email
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-BOOTSTRAP_SECRET=CareFlowDefaultSecret2026
+BOOTSTRAP_SECRET=CareFlowLocalSecretKey_2026
 ```
 
 ### Running Locally
@@ -116,6 +116,15 @@ The server will start at `http://localhost:3000/api/v1` and Swagger docs will be
 
 Run the automated integration validation script:
 ```bash
-node C:\Users\mahip\.gemini\antigravity-ide\scratch\verify_flows.js
+node backend/scratch/verify_flows.js
 ```
 This runs a complete EMR patient checkout, POS billing dispensation, and stock deduction lifecycle.
+
+---
+
+## 4. Firestore Database Indexes
+
+While the current backend fetches and sorts transactions in-memory to simplify setup, if you migrate transaction sorting to the query level (e.g., `.orderBy('createdAt', 'desc')`), you will need to define a composite index in your Firebase Console:
+* **Collection**: `stockTransactions`
+* **Fields**: `medicineId` (Ascending) + `type` (Ascending) + `createdAt` (Descending)
+
