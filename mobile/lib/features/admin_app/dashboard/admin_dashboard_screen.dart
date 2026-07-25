@@ -2,124 +2,305 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_card.dart';
 
-class AdminDashboardScreen extends ConsumerWidget {
+class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final authUser = ref.watch(authStatePrv);
+    final theme = Theme.of(context);
+
+    // Navigation Pages
+    final List<Widget> screens = [
+      _buildDashboard(authUser, theme),
+      const Center(child: Text('Patient Records Registry')),
+      const Center(child: Text('Pharmacy Billing & Dispatch POS')),
+      const Center(child: Text('Inventory Control & Reorders')),
+      const Center(child: Text('Financial Reports & Analytics')),
+    ];
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Control Panel'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.primary.withOpacity(0.12),
+              child: const Icon(Icons.shield, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Operations Portal,',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  'Hospital Administrator',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Logout',
+            icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: AppColors.textPrimary),
             onPressed: () {
               ref.read(authStatePrv.notifier).logout();
             },
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Welcome, Administrator',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                authUser.email,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  children: [
-                    _buildFeatureCard(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'Inventory Control',
-                      color: AppColors.primary,
-                    ),
-                    _buildFeatureCard(
-                      icon: Icons.badge_outlined,
-                      label: 'Staff Management',
-                      color: AppColors.success,
-                    ),
-                    _buildFeatureCard(
-                      icon: Icons.receipt_long_outlined,
-                      label: 'Billing & Invoices',
-                      color: AppColors.warning,
-                    ),
-                    _buildFeatureCard(
-                      icon: Icons.bar_chart_outlined,
-                      label: 'Analytics & Reports',
-                      color: AppColors.secondary,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+      body: screens[_currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() => _currentIndex = index);
+        },
+        backgroundColor: Colors.white,
+        elevation: 8,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics, color: AppColors.primary),
+            label: 'Overview',
           ),
-        ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people, color: AppColors.primary),
+            label: 'Patients',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.point_of_sale_outlined),
+            selectedIcon: Icon(Icons.point_of_sale, color: AppColors.primary),
+            label: 'POS',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2, color: AppColors.primary),
+            label: 'Stock',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart, color: AppColors.primary),
+            label: 'Ledgers',
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFeatureCard({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Card(
-      color: AppColors.surface,
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () {},
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildDashboard(AuthState authUser, ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Operational Metrics Grid
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.5,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  shape: BoxShape.circle,
+              _buildMiniMetric('Today\'s Revenue', '\$12,450', '+8% vs yesterday', AppColors.success, Icons.trending_up),
+              _buildMiniMetric('Active Beds', '42/50', '84% occupancy', AppColors.primary, Icons.bedroom_child),
+              _buildMiniMetric('Low Stock SKUs', '14 items', 'Needs attention', AppColors.critical, Icons.warning_amber),
+              _buildMiniMetric('Pending Bills', '8 patients', '\$2,100 outstanding', AppColors.secondary, Icons.receipt),
+            ],
+          ),
+          const SizedBox(height: 28),
+
+          // Inventory Alerts Board
+          Text(
+            'Inventory & Dispatch Warnings',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppCard(
+            child: Column(
+              children: [
+                _buildAlertItem(
+                  'Aspirin 100mg (MED-ASP-100)',
+                  'Critical stock levels (Remaining: 20 units, Min required: 50)',
+                  'Restock',
+                  AppColors.critical,
                 ),
-                child: Icon(icon, color: color, size: 28),
-              ),
-              const SizedBox(height: 16),
+                const Divider(height: 24),
+                _buildAlertItem(
+                  'Amoxicillin 250mg (MED-AMO-250)',
+                  'Out of stock. 4 prescriptions backordered.',
+                  'Procure',
+                  AppColors.critical,
+                ),
+                const Divider(height: 24),
+                _buildAlertItem(
+                  'Paracetamol Batch B2',
+                  'Expiry warning: Expiries on August 15, 2026.',
+                  'Dispose',
+                  AppColors.warning,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // Recent Activity Log
+          Text(
+            'Recent Operations Activity',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppCard(
+            child: ListView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildActivityRow('03:45 PM', 'Invoice #INV-9281 created', 'Patient Alice Patient • Amount: \$45.00'),
+                _buildActivityRow('03:12 PM', 'Doctor Check-in recorded', 'Dr. Gregory House checked into Consultation Room 304'),
+                _buildActivityRow('02:30 PM', 'Stock received', '500 units Ibuprofen checked into Batch B5'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniMetric(
+    String label,
+    String value,
+    String caption,
+    Color accentColor,
+    IconData icon,
+  ) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
               Text(
                 label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+              ),
+              Icon(icon, color: accentColor, size: 16),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            caption,
+            style: TextStyle(fontSize: 9, color: accentColor, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertItem(String title, String description, String actionText, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.error_outline, color: color, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
               ),
             ],
           ),
         ),
+        const SizedBox(width: 12),
+        TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: color,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () {},
+          child: Text(
+            actionText,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityRow(String time, String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            time,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.textMuted),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
