@@ -1,0 +1,36 @@
+# NestJS/Node
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.production
+.env.development
+.env.local
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+ios/Flutter/.ios/
+android/app/local.properties
+android/key.properties
+*.key
+*.keystore
+*.jks
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Firebase secrets
+firebase-service-account.json
+*firebase-adminsdk*.json
