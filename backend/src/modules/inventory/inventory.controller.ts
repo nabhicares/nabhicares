@@ -51,6 +51,13 @@ export class InventoryController {
     return this.inventoryService.getLowStockMedicines();
   }
 
+  @Get('medicines/:id/batches')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist', 'doctor')
+  @ApiOperation({ summary: 'Retrieve all batches for a specific medicine' })
+  findBatches(@Param('id') id: string) {
+    return this.inventoryService.findBatches(id);
+  }
+
   @Post('adjust')
   @Roles('super_admin', 'hospital_admin', 'pharmacist')
   @ApiOperation({ summary: 'Log audited stock overrides and corrections' })

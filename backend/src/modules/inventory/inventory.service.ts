@@ -136,4 +136,13 @@ export class InventoryService {
       return { medicineId, batchNo, quantityChange, newTotal };
     });
   }
+
+  async findBatches(medicineId: string) {
+    const snapshot = await this.firestore
+      .collection('medicines')
+      .doc(medicineId)
+      .collection('batches')
+      .get();
+    return snapshot.docs.map((doc) => doc.data());
+  }
 }
