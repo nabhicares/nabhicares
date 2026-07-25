@@ -156,10 +156,26 @@ export class FirestoreService implements OnModuleInit {
           });
           console.log('[FirestoreService] Firebase Admin SDK initialized via service-account JSON.');
         } else {
-          admin.initializeApp({
-            projectId: this.configService.get<string>('FIREBASE_PROJECT_ID') || 'pharma-store-49792',
-          });
-          console.log('[FirestoreService] Firebase Admin SDK initialized using local default credentials.');
+          const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
+          const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
+          let privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
+
+          if (projectId && clientEmail && privateKey) {
+            privateKey = privateKey.replace(/\\n/g, '\n');
+            admin.initializeApp({
+              credential: admin.credential.cert({
+                projectId,
+                clientEmail,
+                privateKey,
+              }),
+            });
+            console.log('[FirestoreService] Firebase Admin SDK initialized via environment variables.');
+          } else {
+            admin.initializeApp({
+              projectId: projectId || 'pharma-store-49792',
+            });
+            console.log('[FirestoreService] Firebase Admin SDK initialized using local default credentials.');
+          }
         }
       } catch (error) {
         console.warn('[FirestoreService] Firebase SDK initialization failed:', error.message);
