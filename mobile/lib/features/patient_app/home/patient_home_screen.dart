@@ -4,6 +4,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../doctor_search/doctor_search_screen.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -252,7 +253,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 icon: Icons.calendar_month_outlined,
                 label: 'Book Appt',
                 color: AppColors.primary,
-                onTap: () => setState(() => _currentIndex = 1),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DoctorSearchScreen(),
+                    ),
+                  );
+                },
               ),
               _buildActionCard(
                 icon: Icons.assignment_outlined,
@@ -288,7 +296,14 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () => setState(() => _currentIndex = 1),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DoctorSearchScreen(),
+                    ),
+                  );
+                },
                 child: const Text('View All'),
               ),
             ],
