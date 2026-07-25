@@ -33,8 +33,9 @@ export class InventoryController {
     @Query('status') status?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('includeInactive') includeInactive?: string,
   ) {
-    return this.inventoryService.findAllMedicines(q, category, status, page, limit);
+    return this.inventoryService.findAllMedicines(q, category, status, page, limit, includeInactive);
   }
 
   @Get('alerts')
@@ -42,6 +43,13 @@ export class InventoryController {
   @ApiOperation({ summary: 'List all inventory alert reports: low stock, out of stock, expiring soon' })
   getAlerts(@Query('withinDays') withinDays?: number) {
     return this.inventoryService.getAlerts(withinDays);
+  }
+
+  @Get('summary')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Get total dashboard summary of active inventory value and alert counts' })
+  getSummary() {
+    return this.inventoryService.getInventorySummary();
   }
 
   @Get('transactions')

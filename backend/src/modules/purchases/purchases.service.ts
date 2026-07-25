@@ -135,7 +135,13 @@ export class PurchasesService {
           throw new NotFoundException(`Medicine ${recItem.medicineId} is not part of this purchase order.`);
         }
 
-        orderLineItem.quantityReceived = (orderLineItem.quantityReceived || 0) + recItem.quantityReceived;
+        const totalReceived = (orderLineItem.quantityReceived || 0) + recItem.quantityReceived;
+        if (totalReceived > orderLineItem.quantity) {
+          throw new BadRequestException(
+            `Cannot receive more quantity than ordered for Medicine ${recItem.medicineId}. Ordered: ${orderLineItem.quantity}, Already Received: ${orderLineItem.quantityReceived || 0}, Incoming: ${recItem.quantityReceived}`
+          );
+        }
+        orderLineItem.quantityReceived = totalReceived;
 
         const now = new Date();
         now.setHours(0, 0, 0, 0);

@@ -56,9 +56,15 @@ export class InventoryService {
     return data;
   }
 
-  async findAllMedicines(q?: string, category?: string, status?: string, page = 1, limit = 10) {
+  async findAllMedicines(q?: string, category?: string, status?: string, page = 1, limit = 10, includeInactive?: string | boolean) {
     const snapshot = await this.firestore.collection('medicines').get();
     let list = snapshot.docs.map((doc) => doc.data());
+
+    // Exclude inactive medicines by default unless explicitly requested otherwise
+    const showInactive = includeInactive === 'true' || includeInactive === true;
+    if (!showInactive) {
+      list = list.filter((m: any) => m.status !== 'inactive');
+    }
 
     if (q) {
       const term = q.toLowerCase();
@@ -92,11 +98,13 @@ export class InventoryService {
     const paginated = list.slice(startIndex, startIndex + limitNum);
 
     return {
-      data: paginated,
-      totalCount,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(totalCount / limitNum)
+      items: paginated,
+      meta: {
+        totalCount,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+      },
     };
   }
 
@@ -321,5 +329,60 @@ export class InventoryService {
 
     list.sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt));
     return list;
+  }
+
+  async getInventorySummary() {
+    const medsSnapshot = await this.firestore.collection('medicines').get();
+    const medicines = medsSnapshot.docs.map((doc) => doc.data());
+    const activeMeds = medicines.filter((m: any) => m.status === 'active');
+
+    let totalSKUs = activeMeds.length;
+    let totalUnits = 0;
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    let totalValue = 0;
+    let expiringCount = 0;
+
+    const now = new Date();
+    const limitDate = new Date();
+    limitDate.setDate(now.getDate() + 30); // within 30 days
+
+    for (const med of activeMeds) {
+      totalUnits += med.totalQuantity || 0;
+      if (med.totalQuantity === 0) {
+        outOfStockCount++;
+      } else if (med.totalQuantity <= med.reorderLevel) {
+        lowStockCount++;
+      }
+
+      const batchesSnapshot = await this.firestore.collection('medicines')
+        .doc(med.id)
+        .collection('batches')
+        .get();
+
+      for (const batchDoc of batchesSnapshot.docs) {
+        const batch = batchDoc.data();
+        if (batch.quantity > 0) {
+          totalValue += (batch.quantity * (batch.unitPrice || 0));
+
+          if (batch.expiryDate) {
+            const expiry = new Date(batch.expiryDate);
+            if (expiry >= now && expiry <= limitDate) {
+              expiringCount++;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      totalSKUs,
+      totalUnits,
+      lowStockCount,
+      outOfStockCount,
+      expiringCount,
+      totalValue,
+      updatedAt: new Date().toISOString()
+    };
   }
 }

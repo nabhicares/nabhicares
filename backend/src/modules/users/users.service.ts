@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { FirestoreService } from '../../database/firestore.service';
 import { AssignRoleDto } from './dto/assign-role.dto';
@@ -76,7 +76,17 @@ export class UsersService {
     return doc.data();
   }
 
-  async bootstrapUser(dto: UserBootstrapDto) {
+  async bootstrapUser(dto: UserBootstrapDto, secretHeader?: string) {
+    const bootstrapSecret = process.env.BOOTSTRAP_SECRET || 'CareFlowDefaultSecret2026';
+
+    const superAdminSnapshot = await this.firestore.collection('users')
+      .where('role', '==', 'super_admin')
+      .get();
+    
+    if (!superAdminSnapshot.empty && secretHeader !== bootstrapSecret) {
+      throw new ForbiddenException('Bootstrap is locked down. A valid secret header is required to register new users via bootstrap.');
+    }
+
     const isMock =
       !process.env.FIREBASE_PRIVATE_KEY ||
       process.env.FIREBASE_PRIVATE_KEY.includes('MOCK_KEY');

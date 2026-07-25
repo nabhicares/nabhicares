@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserProfileDto } from './dto/create-user-profile.dto';
@@ -41,7 +41,10 @@ export class UsersController {
 
   @Post('bootstrap')
   @ApiOperation({ summary: 'Bootstrap a new staff user credentials and roles' })
-  bootstrap(@Body() dto: UserBootstrapDto) {
-    return this.usersService.bootstrapUser(dto);
+  bootstrap(
+    @Body() dto: UserBootstrapDto,
+    @Headers('x-bootstrap-secret') secretHeader?: string,
+  ) {
+    return this.usersService.bootstrapUser(dto, secretHeader);
   }
 }

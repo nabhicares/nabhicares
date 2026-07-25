@@ -231,6 +231,32 @@ export class DatabaseSeeder implements OnApplicationBootstrap {
         createdAt: new Date().toISOString(),
       });
 
+      // 7. Seed Sample Purchase Order
+      const purchaseOrdersCollection = this.firestore.collection('purchaseOrders');
+      await purchaseOrdersCollection.doc('po-sample-101').set({
+        id: 'po-sample-101',
+        supplierId: 'mock-supplier-abc',
+        supplierName: 'PharmaCorp Distributors',
+        items: [
+          {
+            medicineId: 'MED-ASP-100',
+            medicineName: 'Aspirin 100mg',
+            quantity: 100,
+            unitPrice: 0.5,
+            quantityReceived: 0,
+          },
+          {
+            medicineId: 'MED-PAR-500',
+            medicineName: 'Paracetamol 500mg',
+            quantity: 200,
+            unitPrice: 0.2,
+            quantityReceived: 0,
+          },
+        ],
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      });
+
       console.log('[DatabaseSeeder] Seeding verification complete.');
     } catch (err: any) {
       console.error('[DatabaseSeeder] Seeding failed:', err.message);
