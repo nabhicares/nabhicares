@@ -123,7 +123,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _buildDashboard(AuthState authUser, ThemeData theme, String hospitalName) {
+  Widget _buildDashboard(AuthUserState authUser, ThemeData theme, String hospitalName) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(

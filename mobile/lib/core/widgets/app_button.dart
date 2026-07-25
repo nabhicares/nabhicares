@@ -78,7 +78,7 @@ class AppButton extends StatelessWidget {
           overlayColor: WidgetStateProperty.resolveWith<Color?>(
             (states) {
               if (states.contains(WidgetState.pressed)) {
-                return getTextColor().withOpacity(0.12);
+                return getTextColor().withValues(alpha: 0.12);
               }
               return null;
             },

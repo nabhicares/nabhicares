@@ -37,7 +37,7 @@ class LoadingIndicator extends StatelessWidget {
 
     if (isFullScreen) {
       return Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.15),
+        backgroundColor: Colors.black.withValues(alpha: 0.15),
         body: indicator,
       );
     }

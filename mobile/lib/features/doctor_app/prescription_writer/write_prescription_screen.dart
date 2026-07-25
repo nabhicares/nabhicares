@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/empty_state.dart';
-import '../../../core/widgets/loading_indicator.dart';
 
 class FormPrescriptionItem {
   String medicineId;

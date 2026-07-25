@@ -113,7 +113,7 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
     );
   }
 
-  Widget _buildDashboard(AuthState authUser, ThemeData theme) {
+  Widget _buildDashboard(AuthUserState authUser, ThemeData theme) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(

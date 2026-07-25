@@ -8,7 +8,6 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../shared_models/prescription.dart';
-import '../../../shared_models/medicine.dart';
 
 // Fetch all pending prescriptions from GET /prescriptions endpoint
 final pendingPrescriptionsProvider = FutureProvider<List<Prescription>>((ref) async {
@@ -151,7 +150,7 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
                 _selectedPrescription = null;
                 _selectedBatches.clear();
               });
-              ref.refresh(pendingPrescriptionsProvider); // Refresh list
+              ref.invalidate(pendingPrescriptionsProvider);
             },
             child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
@@ -201,7 +200,9 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
           Expanded(
             flex: 2,
             child: Container(
-              border: Border(right: BorderSide(color: Colors.grey.shade200)),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.grey.shade200)),
+              ),
               child: prescriptionsAsync.when(
                 data: (prescriptions) {
                   if (prescriptions.isEmpty) {

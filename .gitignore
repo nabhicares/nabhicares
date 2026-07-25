@@ -15,6 +15,8 @@ yarn-error.log*
 .pub-cache/
 .pub/
 build/
+.flutter-plugins
+.flutter-plugins-dependencies
 ios/Flutter/.ios/
 android/app/local.properties
 android/key.properties

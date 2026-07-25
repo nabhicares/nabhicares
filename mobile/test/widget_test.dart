@@ -9,7 +9,7 @@ void main() {
     // 1. Boot the application inside a ProviderScope container
     await tester.pumpWidget(
       const ProviderScope(
-        child: MyApp(),
+        child: PharmaStoreApp(),
       ),
     );
 
@@ -22,10 +22,10 @@ void main() {
     expect(find.text('Unified Hospital Operations Portal'), findsOneWidget);
 
     // 3. Verify that the Portal Selection ChoiceChips exist
-    expect(find.text('Patient'), findsOneWidget);
-    expect(find.text('Doctor'), findsOneWidget);
-    expect(find.text('Pharmacist'), findsOneWidget);
-    expect(find.text('Admin'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Patient'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Doctor'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Pharmacist'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Admin'), findsOneWidget);
 
     // 4. Verify that Input Fields exist
     expect(find.byType(TextField), findsNWidgets(2)); // Email & Password

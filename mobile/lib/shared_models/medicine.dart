@@ -1,3 +1,5 @@
+import 'stock_status.dart';
+
 class BatchItem {
   final String batchNo;
   final String expiryDate;
@@ -28,6 +30,18 @@ class BatchItem {
       'unitPrice': unitPrice,
     };
   }
+
+  /// Days remaining until expiry, or null when the date cannot be parsed.
+  int? get daysToExpiry {
+    final parsed = DateTime.tryParse(expiryDate);
+    if (parsed == null) return null;
+    final today = DateTime.now();
+    return DateTime(parsed.year, parsed.month, parsed.day)
+        .difference(DateTime(today.year, today.month, today.day))
+        .inDays;
+  }
+
+  bool get isExpired => (daysToExpiry ?? 1) < 0;
 }
 
 class Medicine {
@@ -114,5 +128,16 @@ class Medicine {
       'location': location,
       'status': status,
     };
+  }
+
+  StockStatus get stockStatus =>
+      StockStatus.of(totalQuantity: totalQuantity, reorderLevel: reorderLevel);
+
+  bool get isActive => status != 'inactive';
+
+  /// "Paracetamol 500mg · tablet" style secondary line used across list rows.
+  String get subtitle {
+    final parts = [genericName, brand, form].where((p) => p != null && p.isNotEmpty);
+    return parts.join(' · ');
   }
 }
