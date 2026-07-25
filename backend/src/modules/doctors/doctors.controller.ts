@@ -48,4 +48,11 @@ export class DoctorsController {
   getSlots(@Param('id') id: string, @Query('date') date: string) {
     return this.doctorsService.getAvailableSlots(id, date);
   }
+
+  @Get(':id/schedule')
+  @Roles('super_admin', 'hospital_admin', 'doctor', 'receptionist')
+  @ApiOperation({ summary: 'Retrieve weekly consultation schedule template' })
+  getSchedule(@Param('id') id: string) {
+    return this.doctorsService.getSchedule(id);
+  }
 }

@@ -28,18 +28,19 @@ export class PrescriptionsController {
     return this.prescriptionsService.findPending();
   }
 
-  @Get(':id')
-  @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist', 'patient')
-  @ApiOperation({ summary: 'Retrieve detailed prescription outline' })
-  findOne(@Param('id') id: string) {
-    return this.prescriptionsService.findOne(id);
-  }
-
+  // Static segment before :id so Nest does not treat "patient" as an id.
   @Get('patient/:patientId')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist', 'patient')
   @ApiOperation({ summary: 'Retrieve historical prescriptions of a patient' })
   findPatientPrescriptions(@Param('patientId') patientId: string) {
     return this.prescriptionsService.findPatientPrescriptions(patientId);
+  }
+
+  @Get(':id')
+  @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist', 'patient')
+  @ApiOperation({ summary: 'Retrieve detailed prescription outline' })
+  findOne(@Param('id') id: string) {
+    return this.prescriptionsService.findOne(id);
   }
 
   @Put(':id/dispense/:itemIndex')

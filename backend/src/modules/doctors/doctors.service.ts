@@ -57,6 +57,8 @@ export class DoctorsService {
   }
 
   async getSchedule(id: string) {
+    await this.findOne(id);
+
     const doc = await this.firestore
       .collection('doctors')
       .doc(id)
@@ -64,10 +66,27 @@ export class DoctorsService {
       .doc('template')
       .get();
 
-    if (!doc.exists) {
-      return { slotDurationMinutes: 30, weeklySchedules: [] };
+    if (doc.exists) {
+      return doc.data();
     }
-    return doc.data();
+
+    // Fall back to legacy weeklySchedule map seeded on the doctor document.
+    const doctor = await this.findOne(id);
+    const legacy = doctor?.weeklySchedule as Record<string, string[]> | undefined;
+    if (legacy && typeof legacy === 'object') {
+      const weeklySchedules: Array<{ dayOfWeek: string; startTime: string; endTime: string }> = [];
+      for (const [day, ranges] of Object.entries(legacy)) {
+        for (const range of ranges || []) {
+          const [startTime, endTime] = range.split('-');
+          if (startTime && endTime) {
+            weeklySchedules.push({ dayOfWeek: day, startTime, endTime });
+          }
+        }
+      }
+      return { slotDurationMinutes: 30, weeklySchedules };
+    }
+
+    return { slotDurationMinutes: 30, weeklySchedules: [] };
   }
 
   async getAvailableSlots(id: string, date: string) {

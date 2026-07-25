@@ -20,13 +20,7 @@ export class AppointmentsController {
     return this.appointmentsService.bookAppointment(dto);
   }
 
-  @Get(':id')
-  @Roles('super_admin', 'hospital_admin', 'doctor', 'receptionist', 'patient')
-  @ApiOperation({ summary: 'Retrieve appointment profile information' })
-  findOne(@Param('id') id: string) {
-    return this.appointmentsService.findOne(id);
-  }
-
+  // Static path segments MUST be registered before :id or Nest shadows them.
   @Get('doctor/:doctorId')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'receptionist')
   @ApiOperation({ summary: 'Retrieve daily/weekly scheduled lists for a doctor' })
@@ -39,6 +33,13 @@ export class AppointmentsController {
   @ApiOperation({ summary: 'Retrieve history logs for a patient' })
   findPatientHistory(@Param('patientId') patientId: string) {
     return this.appointmentsService.findPatientHistory(patientId);
+  }
+
+  @Get(':id')
+  @Roles('super_admin', 'hospital_admin', 'doctor', 'receptionist', 'patient')
+  @ApiOperation({ summary: 'Retrieve appointment profile information' })
+  findOne(@Param('id') id: string) {
+    return this.appointmentsService.findOne(id);
   }
 
   @Put(':id/cancel')

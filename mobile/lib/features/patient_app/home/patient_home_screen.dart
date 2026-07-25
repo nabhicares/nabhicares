@@ -4,7 +4,11 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../appointments/patient_appointments_screen.dart';
 import '../doctor_search/doctor_search_screen.dart';
+import '../notifications/notifications_hub_screen.dart';
+import '../prescriptions/patient_prescriptions_screen.dart';
+import '../profile/patient_profile_screen.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -28,13 +32,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       error: (_, __) => 'Pharma Store General Hospital',
     );
 
-    // List of screens for bottom navigation
     final List<Widget> screens = [
       _buildDashboard(authUser, theme, hospitalName),
-      const Center(child: Text('My Appointments Screen')),
-      const Center(child: Text('Prescriptions List Screen')),
-      const Center(child: Text('Notifications Hub')),
-      const Center(child: Text('Profile Settings Screen')),
+      const PatientAppointmentsScreen(),
+      const PatientPrescriptionsScreen(),
+      const NotificationsHubScreen(),
+      const PatientProfileScreen(),
     ];
 
     return Scaffold(
@@ -45,7 +48,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
         title: Row(
           children: [
             CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.12),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
               child: const Icon(Icons.person, color: AppColors.primary),
             ),
             const SizedBox(width: 12),

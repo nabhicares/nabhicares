@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../hours/doctor_hours_screen.dart';
+import '../patients/doctor_patients_screen.dart';
 import '../prescription_writer/write_prescription_screen.dart';
+import '../profile/doctor_profile_screen.dart';
+import '../queue/doctor_queue_screen.dart';
 
 class DoctorDashboardScreen extends ConsumerStatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -20,13 +24,12 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
     final authUser = ref.watch(authStatePrv);
     final theme = Theme.of(context);
 
-    // Doctor navigation pages
     final List<Widget> screens = [
       _buildDashboard(authUser, theme),
-      const Center(child: Text('Appointments List Portal')),
-      const Center(child: Text('My Active Patient EMR Registry')),
-      const Center(child: Text('Weekly Consultation Schedule Editor')),
-      const Center(child: Text('Doctor Profile Settings')),
+      const DoctorQueueScreen(),
+      const DoctorPatientsScreen(),
+      const DoctorHoursScreen(),
+      const DoctorProfileScreen(),
     ];
 
     return Scaffold(
@@ -37,7 +40,7 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
         title: Row(
           children: [
             CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.12),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
               child: const Icon(Icons.medical_services, color: AppColors.primary),
             ),
             const SizedBox(width: 12),

@@ -261,6 +261,115 @@ export class DatabaseSeeder implements OnApplicationBootstrap {
         createdAt: new Date().toISOString(),
       });
 
+      // 8. Seed appointments / EMR / prescriptions / notifications for UI demos
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      const tomorrow = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
+
+      const appointmentsCollection = this.firestore.collection('appointments');
+      await appointmentsCollection.doc('apt-demo-001').set({
+        id: 'apt-demo-001',
+        patientId: 'BADP1K3A',
+        patientName: 'Alice Patient',
+        doctorId: '5D4181ZA',
+        doctorName: 'Dr. Gregory House',
+        date: today,
+        timeSlot: '09:00',
+        status: 'booked',
+        createdAt: now.toISOString(),
+      });
+      await appointmentsCollection.doc('apt-demo-002').set({
+        id: 'apt-demo-002',
+        patientId: 'BADP1K3A',
+        patientName: 'Alice Patient',
+        doctorId: '5D4181ZA',
+        doctorName: 'Dr. Gregory House',
+        date: tomorrow,
+        timeSlot: '10:30',
+        status: 'booked',
+        createdAt: now.toISOString(),
+      });
+      await appointmentsCollection.doc('apt-demo-003').set({
+        id: 'apt-demo-003',
+        patientId: 'BADP1K3A',
+        patientName: 'Alice Patient',
+        doctorId: '5D4181ZA',
+        doctorName: 'Dr. Gregory House',
+        date: '2026-07-20',
+        timeSlot: '11:00',
+        status: 'completed',
+        createdAt: '2026-07-20T05:00:00.000Z',
+      });
+
+      await this.firestore
+        .collection('doctors')
+        .doc('5D4181ZA')
+        .collection('schedule')
+        .doc('template')
+        .set({
+          slotDurationMinutes: 30,
+          weeklySchedules: [
+            { dayOfWeek: 'Monday', startTime: '09:00', endTime: '12:00' },
+            { dayOfWeek: 'Monday', startTime: '14:00', endTime: '17:00' },
+            { dayOfWeek: 'Wednesday', startTime: '09:00', endTime: '12:00' },
+            { dayOfWeek: 'Friday', startTime: '09:00', endTime: '12:00' },
+            { dayOfWeek: 'Friday', startTime: '14:00', endTime: '17:00' },
+          ],
+          updatedAt: now.toISOString(),
+        });
+
+      const prescriptionsCollection = this.firestore.collection('prescriptions');
+      await prescriptionsCollection.doc('rx-demo-001').set({
+        id: 'rx-demo-001',
+        consultationId: 'consult-demo-001',
+        patientId: 'BADP1K3A',
+        doctorId: 'mock-doctor-abc',
+        items: [
+          {
+            medicineId: 'MED-PAR-500',
+            medicineName: 'Paracetamol 500mg',
+            dosage: '1 tablet twice daily',
+            duration: '5 days',
+            instructions: 'After food',
+            status: 'pending',
+          },
+          {
+            medicineId: 'MED-IBU-400',
+            medicineName: 'Ibuprofen 400mg',
+            dosage: '1 tablet as needed',
+            duration: '3 days',
+            instructions: 'Max 3 per day',
+            status: 'pending',
+          },
+        ],
+        status: 'pending',
+        createdAt: now.toISOString(),
+      });
+
+      // Match Flutter mock-login token UIDs so Notifications Hub has rows.
+      const notificationsCollection = this.firestore.collection('notifications');
+      const notifyTargets = [
+        'mock-patient-demo_patient_pharmastore.com',
+        'mock-patient-123',
+        'mock-doctor-demo_doctor_pharmastore.com',
+        'mock-doctor-abc',
+      ];
+      let n = 0;
+      for (const userId of notifyTargets) {
+        n += 1;
+        await notificationsCollection.doc(`notif-demo-${n}`).set({
+          id: `notif-demo-${n}`,
+          userId,
+          title: n % 2 === 0 ? 'Appointment reminder' : 'Prescription update',
+          body:
+            n % 2 === 0
+              ? 'You have an upcoming consultation with Dr. Gregory House.'
+              : 'Your pharmacy has an active prescription ready for review.',
+          status: 'sent_mock',
+          createdAt: now.toISOString(),
+        });
+      }
+
       console.log('[DatabaseSeeder] Seeding verification complete.');
     } catch (err: any) {
       console.error('[DatabaseSeeder] Seeding failed:', err.message);
