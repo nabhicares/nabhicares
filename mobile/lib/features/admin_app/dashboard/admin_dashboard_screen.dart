@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import 'providers/admin_dashboard_provider.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -18,10 +19,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final authUser = ref.watch(authStatePrv);
     final theme = Theme.of(context);
+    final metricsAsync = ref.watch(adminDashboardMetricsProvider);
 
     // Navigation Pages
     final List<Widget> screens = [
-      _buildDashboard(authUser, theme),
+      _buildDashboard(authUser, theme, metricsAsync),
       const Center(child: Text('Patient Records Registry')),
       const Center(child: Text('Pharmacy Billing & Dispatch POS')),
       const Center(child: Text('Inventory Control & Reorders')),
@@ -112,7 +114,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDashboard(AuthState authUser, ThemeData theme) {
+  Widget _buildDashboard(AuthState authUser, ThemeData theme, AsyncValue<AdminDashboardMetrics> metricsAsync) {
+    final metrics = metricsAsync.asData?.value;
+    final totalRevenue = metrics != null ? '\$${metrics.totalRevenue.toStringAsFixed(0)}' : '\$0';
+    final lowStockCount = metrics != null ? '${metrics.lowStockItemsCount} items' : '0 items';
+    final appointmentsCount = metrics != null ? '${metrics.appointmentsCount}' : '0';
+    final stockItemsCount = metrics != null ? '${metrics.totalStockItems} items' : '0 items';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -127,10 +135,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             mainAxisSpacing: 16,
             childAspectRatio: 1.5,
             children: [
-              _buildMiniMetric('Today\'s Revenue', '\$12,450', '+8% vs yesterday', AppColors.success, Icons.trending_up),
-              _buildMiniMetric('Active Beds', '42/50', '84% occupancy', AppColors.primary, Icons.bedroom_child),
-              _buildMiniMetric('Low Stock SKUs', '14 items', 'Needs attention', AppColors.critical, Icons.warning_amber),
-              _buildMiniMetric('Pending Bills', '8 patients', '\$2,100 outstanding', AppColors.secondary, Icons.receipt),
+              _buildMiniMetric('Today\'s Revenue', totalRevenue, 'Live database sync', AppColors.success, Icons.trending_up),
+              _buildMiniMetric('Appointments', appointmentsCount, 'Booked slot queue', AppColors.primary, Icons.calendar_month),
+              _buildMiniMetric('Low Stock SKUs', lowStockCount, 'Threshold alert levels', AppColors.critical, Icons.warning_amber),
+              _buildMiniMetric('Total Stock SKUs', stockItemsCount, 'Unique medicine catalog', AppColors.secondary, Icons.receipt),
             ],
           ),
           const SizedBox(height: 28),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/providers/settings_provider.dart';
 
 class PatientHomeScreen extends ConsumerStatefulWidget {
   const PatientHomeScreen({super.key});
@@ -18,10 +19,17 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   Widget build(BuildContext context) {
     final authUser = ref.watch(authStatePrv);
     final theme = Theme.of(context);
+    final settingsAsync = ref.watch(settingsProvider);
+    
+    final hospitalName = settingsAsync.when(
+      data: (data) => data['hospitalName'] as String? ?? 'Pharma Store General Hospital',
+      loading: () => 'Loading...',
+      error: (_, __) => 'Pharma Store General Hospital',
+    );
 
     // List of screens for bottom navigation
     final List<Widget> screens = [
-      _buildDashboard(authUser, theme),
+      _buildDashboard(authUser, theme, hospitalName),
       const Center(child: Text('My Appointments Screen')),
       const Center(child: Text('Prescriptions List Screen')),
       const Center(child: Text('Notifications Hub')),
@@ -44,7 +52,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Good Morning,',
+                  hospitalName,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
                   ),
@@ -114,7 +122,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _buildDashboard(AuthState authUser, ThemeData theme) {
+  Widget _buildDashboard(AuthState authUser, ThemeData theme, String hospitalName) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
