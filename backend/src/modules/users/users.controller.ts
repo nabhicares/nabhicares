@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserProfileDto } from './dto/create-user-profile.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
+import { UserBootstrapDto } from './dto/user-bootstrap.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -36,5 +37,11 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile data' })
   me(@CurrentUser() user: any) {
     return this.usersService.getProfile(user.uid);
+  }
+
+  @Post('bootstrap')
+  @ApiOperation({ summary: 'Bootstrap a new staff user credentials and roles' })
+  bootstrap(@Body() dto: UserBootstrapDto) {
+    return this.usersService.bootstrapUser(dto);
   }
 }

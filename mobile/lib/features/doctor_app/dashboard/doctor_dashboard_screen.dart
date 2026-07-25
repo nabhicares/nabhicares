@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
+import '../prescription_writer/write_prescription_screen.dart';
 
 class DoctorDashboardScreen extends ConsumerStatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -332,7 +333,14 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const WritePrescriptionScreen(),
+                              ),
+                            );
+                          },
                           child: const Text('Start Visit', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 8),

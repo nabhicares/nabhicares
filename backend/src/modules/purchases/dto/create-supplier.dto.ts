@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSupplierDto {
   @ApiProperty({ example: 'PharmaCorp Distributors' })
@@ -16,4 +16,19 @@ export class CreateSupplierDto {
   @IsNotEmpty()
   @IsString()
   address: string;
+
+  @ApiPropertyOptional({ example: '+919999999999' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: '36AAAAA0000A1Z5' })
+  @IsOptional()
+  @IsString()
+  gstin?: string;
+
+  @ApiPropertyOptional({ example: 'Mr. Rajesh Kumar' })
+  @IsOptional()
+  @IsString()
+  contactPerson?: string;
 }

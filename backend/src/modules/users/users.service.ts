@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { FirestoreService } from '../../database/firestore.service';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { CreateUserProfileDto } from './dto/create-user-profile.dto';
+import { UserBootstrapDto } from './dto/user-bootstrap.dto';
 
 @Injectable()
 export class UsersService {
@@ -73,5 +74,47 @@ export class UsersService {
       throw new NotFoundException(`User profile with UID ${uid} does not exist.`);
     }
     return doc.data();
+  }
+
+  async bootstrapUser(dto: UserBootstrapDto) {
+    const isMock =
+      !process.env.FIREBASE_PRIVATE_KEY ||
+      process.env.FIREBASE_PRIVATE_KEY.includes('MOCK_KEY');
+
+    let uid = `mock-uid-${dto.role}-${dto.email.replace('@', '_')}`;
+
+    if (!isMock) {
+      try {
+        const userRecord = await admin.auth().createUser({
+          email: dto.email,
+          password: dto.password,
+          displayName: dto.name,
+        });
+        uid = userRecord.uid;
+        await admin.auth().setCustomUserClaims(uid, { role: dto.role });
+      } catch (err: any) {
+        if (err.code === 'auth/email-already-exists') {
+          const userRecord = await admin.auth().getUserByEmail(dto.email);
+          uid = userRecord.uid;
+          await admin.auth().setCustomUserClaims(uid, { role: dto.role });
+        } else {
+          throw new BadRequestException(`Firebase User bootstrap error: ${err.message}`);
+        }
+      }
+    }
+
+    const userRef = this.firestore.collection('users').doc(uid);
+    const profile = {
+      uid,
+      name: dto.name,
+      email: dto.email,
+      phone: null,
+      role: dto.role,
+      createdAt: new Date().toISOString(),
+      status: 'active',
+    };
+
+    await userRef.set(profile);
+    return { uid, role: dto.role, email: dto.email, status: 'bootstrapped' };
   }
 }

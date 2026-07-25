@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PharmacyService } from './pharmacy.service';
 import { CreateDispensationDto } from './dto/create-dispensation.dto';
@@ -18,5 +18,12 @@ export class PharmacyController {
   @ApiOperation({ summary: 'Process prescription medication dispensing and invoicing' })
   dispense(@Body() dto: CreateDispensationDto) {
     return this.pharmacyService.dispensePrescription(dto);
+  }
+
+  @Get('prescriptions')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist', 'doctor')
+  @ApiOperation({ summary: 'Retrieve list of prescriptions with FEFO suggestions' })
+  getPrescriptions(@Query('status') status?: string) {
+    return this.pharmacyService.findPrescriptions(status);
   }
 }

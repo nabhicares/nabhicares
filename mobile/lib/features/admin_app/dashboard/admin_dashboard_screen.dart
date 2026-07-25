@@ -4,6 +4,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import 'providers/admin_dashboard_provider.dart';
+import '../pharmacy/pharmacy_pos_screen.dart';
+import '../inventory/inventory_list_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -25,8 +27,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     final List<Widget> screens = [
       _buildDashboard(authUser, theme, metricsAsync),
       const Center(child: Text('Patient Records Registry')),
-      const Center(child: Text('Pharmacy Billing & Dispatch POS')),
-      const Center(child: Text('Inventory Control & Reorders')),
+      const PharmacyPosScreen(),
+      const InventoryListScreen(),
       const Center(child: Text('Financial Reports & Analytics')),
     ];
 

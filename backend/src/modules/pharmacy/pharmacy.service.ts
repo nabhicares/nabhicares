@@ -113,4 +113,39 @@ export class PharmacyService {
       };
     });
   }
+
+  async findPrescriptions(status?: string) {
+    const snapshot = await this.firestore.collection('prescriptions').get();
+    let prescriptions = snapshot.docs.map((doc) => doc.data());
+
+    if (status) {
+      prescriptions = prescriptions.filter((p: any) => p.status === status);
+    }
+
+    prescriptions.sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt));
+
+    for (const rx of prescriptions) {
+      for (const item of rx.items) {
+        const batchesSnapshot = await this.firestore.collection('medicines')
+          .doc(item.medicineId)
+          .collection('batches')
+          .get();
+        
+        const batches = batchesSnapshot.docs.map((d) => d.data());
+        const activeBatches = batches.filter((b: any) => b.quantity > 0 && b.expiryDate);
+        activeBatches.sort((a: any, b: any) => a.expiryDate.localeCompare(b.expiryDate));
+
+        if (activeBatches.length > 0) {
+          item.suggestedBatch = activeBatches[0].batchNo;
+          item.suggestedBatchExpiry = activeBatches[0].expiryDate;
+          item.availableStock = activeBatches[0].quantity;
+        } else {
+          item.suggestedBatch = null;
+          item.availableStock = 0;
+        }
+      }
+    }
+
+    return prescriptions;
+  }
 }

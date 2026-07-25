@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { PrescriptionsController } from './prescriptions.controller';
 import { PrescriptionsService } from './prescriptions.service';
-import { FirestoreService } from '../../database/firestore.service';
 
 @Module({
   controllers: [PrescriptionsController],
-  providers: [PrescriptionsService, FirestoreService],
+  providers: [PrescriptionsService],
   exports: [PrescriptionsService],
 })
 export class PrescriptionsModule {}

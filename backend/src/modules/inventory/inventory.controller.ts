@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { CreateMedicineDto } from './dto/create-medicine.dto';
+import { UpdateMedicineDto } from './dto/update-medicine.dto';
 import { AddBatchDto } from './dto/add-batch.dto';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
@@ -25,16 +26,55 @@ export class InventoryController {
 
   @Get('medicines')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist', 'patient')
-  @ApiOperation({ summary: 'Retrieve the complete medicines catalog' })
-  findAllMedicines() {
-    return this.inventoryService.findAllMedicines();
+  @ApiOperation({ summary: 'Retrieve the complete medicines catalog with pagination and filters' })
+  findAllMedicines(
+    @Query('q') q?: string,
+    @Query('category') category?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.inventoryService.findAllMedicines(q, category, status, page, limit);
+  }
+
+  @Get('alerts')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'List all inventory alert reports: low stock, out of stock, expiring soon' })
+  getAlerts(@Query('withinDays') withinDays?: number) {
+    return this.inventoryService.getAlerts(withinDays);
+  }
+
+  @Get('transactions')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Get audit logs and history of all stock movements' })
+  getTransactions(
+    @Query('medicineId') medicineId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('type') type?: string,
+  ) {
+    return this.inventoryService.findTransactions(medicineId, from, to, type);
+  }
+
+  @Get('medicines/:id/transactions')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Get audit transaction history for a specific medicine SKU' })
+  getMedicineTransactions(@Param('id') id: string) {
+    return this.inventoryService.findTransactions(id);
   }
 
   @Get('medicines/:id')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist')
-  @ApiOperation({ summary: 'Retrieve specific medicine properties' })
+  @ApiOperation({ summary: 'Retrieve specific medicine properties with batches' })
   findMedicine(@Param('id') id: string) {
     return this.inventoryService.findMedicine(id);
+  }
+
+  @Patch('medicines/:id')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Partially edit property fields or toggle active status for a medicine' })
+  updateMedicine(@Param('id') id: string, @Body() dto: UpdateMedicineDto) {
+    return this.inventoryService.updateMedicine(id, dto);
   }
 
   @Post('medicines/:id/batch')
