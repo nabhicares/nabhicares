@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import * as express from 'express';
+import express = require('express');
 import * as dotenv from 'dotenv';
 
 dotenv.config();
