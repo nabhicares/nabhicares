@@ -7,6 +7,7 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+!**/.env.example
 .env.production
 .env.development
 .env.local
