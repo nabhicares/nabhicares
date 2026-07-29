@@ -5,9 +5,10 @@ PharmaStore CareFlow is a production-grade healthcare EMR and pharmacy managemen
 ## System Architecture
 
 The project consists of:
-1. **Backend**: NestJS application with a global shared Firestore instance (fully singleton resolved).
-2. **Mobile Client**: Flutter application featuring patient, doctor, pharmacist, and receptionist portals.
-3. **Web Client**: Next.js 16 App Router application targeting the same CareFlow API — role-based portals for all six roles.
+1. **Backend (legacy)**: NestJS + Firestore in `backend/` — still used by current mobile/web demos.
+2. **Backend (scalable)**: FastAPI + Aiven PostgreSQL + Cloudinary + Firebase Auth/FCM in `backend-fastapi/` — target architecture for Nabhi Care multi-hospital HMS. See `backend-fastapi/README.md`.
+3. **Mobile Client**: Flutter application featuring patient, doctor, pharmacist, and receptionist portals.
+4. **Web Client**: Next.js 16 App Router application targeting the CareFlow API — role-based portals for all six roles.
 
 ---
 

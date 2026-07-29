@@ -1,0 +1,9 @@
+﻿alembic
+cloudinary
+fastapi
+firebase-admin
+pydantic-settings
+psycopg[binary,pool]
+python-multipart
+sqlalchemy[asyncio]
+uvicorn[standard]

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nabhi-care-api"
+version = "0.1.0"
+description = "Multi-tenant Nabhi Care hospital management API"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic",
+  "cloudinary",
+  "fastapi",
+  "firebase-admin",
+  "pydantic-settings",
+  "psycopg[binary,pool]",
+  "python-multipart",
+  "sqlalchemy[asyncio]",
+  "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = ["httpx", "pytest", "pytest-asyncio", "ruff"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["RUF012"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
