@@ -36,6 +36,9 @@ class ApiClient {
   Future<ApiResult> put(String path, {Object? body}) =>
       _send(() => _dio.put(path, data: body));
 
+  Future<ApiResult> delete(String path) =>
+      _send(() => _dio.delete(path));
+
   Future<ApiResult> _send(Future<Response<dynamic>> Function() request) async {
     try {
       final response = await request();

@@ -1,16 +1,28 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { FirestoreService } from '../../database/firestore.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
+import { assertPatientRecordAccess, AuthUser } from '../../common/privacy/patient-access';
 
 @Injectable()
 export class PrescriptionsService {
   constructor(private firestore: FirestoreService) {}
 
   async create(doctorId: string, dto: CreatePrescriptionDto) {
+    // Allow quick Rx from the queue without a prior EMR note: create a stub consultation if needed.
     const consultRef = this.firestore.collection('consultations').doc(dto.consultationId);
     const consultDoc = await consultRef.get();
     if (!consultDoc.exists) {
-      throw new NotFoundException(`Consultation EMR with ID ${dto.consultationId} does not exist.`);
+      await consultRef.set({
+        id: dto.consultationId,
+        appointmentId: null,
+        patientId: dto.patientId,
+        doctorId,
+        symptoms: 'Quick prescription',
+        diagnosis: 'As prescribed',
+        vitals: {},
+        clinicalNotes: 'Auto-created with prescription issue',
+        createdAt: new Date().toISOString(),
+      });
     }
 
     const prescriptionRef = this.firestore.collection('prescriptions').doc();
@@ -31,12 +43,16 @@ export class PrescriptionsService {
     return prescription;
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: AuthUser) {
     const doc = await this.firestore.collection('prescriptions').doc(id).get();
     if (!doc.exists) {
       throw new NotFoundException(`Prescription with ID ${id} does not exist.`);
     }
-    return doc.data();
+    const data = doc.data()!;
+    if (user?.role === 'patient') {
+      await assertPatientRecordAccess(this.firestore, data.patientId, user);
+    }
+    return data;
   }
 
   async findPending() {
@@ -47,7 +63,10 @@ export class PrescriptionsService {
     return snapshot.docs.map((doc) => doc.data());
   }
 
-  async findPatientPrescriptions(patientId: string) {
+  async findPatientPrescriptions(patientId: string, user?: AuthUser) {
+    if (user) {
+      await assertPatientRecordAccess(this.firestore, patientId, user);
+    }
     const snapshot = await this.firestore
       .collection('prescriptions')
       .where('patientId', '==', patientId)

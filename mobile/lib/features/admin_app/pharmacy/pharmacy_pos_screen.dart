@@ -3,16 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../shared_models/prescription.dart';
 
-// Fetch all pending prescriptions from GET /prescriptions endpoint
+// Fetch the pharmacy dispensing queue.
 final pendingPrescriptionsProvider = FutureProvider<List<Prescription>>((ref) async {
   final dio = ref.watch(dioClientPrv);
-  final response = await dio.get('/prescriptions');
+  final response = await dio.get('/prescriptions/pending');
   
   if (response.data != null && response.data['success'] == true) {
     final list = response.data['data'] as List<dynamic>? ?? [];
@@ -135,8 +136,8 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
                   _buildReceiptRow('Invoice ID:', invoiceNo),
                   _buildReceiptRow('Dispensation Status:', 'COMPLETED'),
                   const Divider(),
-                  _buildReceiptRow('Tax (18%):', '\$${taxAmount.toStringAsFixed(2)}'),
-                  _buildReceiptRow('Total Price:', '\$${totalAmount.toStringAsFixed(2)}'),
+                  _buildReceiptRow('Tax (18%):', formatCurrency(taxAmount)),
+                  _buildReceiptRow('Total Price:', formatCurrency(totalAmount)),
                 ],
               ),
             ),
@@ -182,10 +183,12 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: Text(
           'Pharmacy POS',
           style: theme.textTheme.titleLarge?.copyWith(
@@ -193,11 +196,22 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
             color: AppColors.textPrimary,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh queue',
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textPrimary),
+            onPressed: () => ref.invalidate(pendingPrescriptionsProvider),
+          ),
+        ],
       ),
-      body: Row(
-        children: [
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 700;
+          return Row(
+            children: [
           // Left Sidebar: Pending Prescriptions Queue
-          Expanded(
+          if (!compact || _selectedPrescription == null)
+            Expanded(
             flex: 2,
             child: Container(
               decoration: BoxDecoration(
@@ -222,7 +236,7 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: AppCard(
-                          backgroundColor: isSelected ? AppColors.primary.withOpacity(0.06) : Colors.white,
+                          backgroundColor: isSelected ? AppColors.primary.withValues(alpha: 0.06) : Colors.white,
                           hasBorder: true,
                           onTap: () {
                             setState(() {
@@ -248,13 +262,20 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
                   );
                 },
                 loading: () => const LoadingIndicator(message: 'Loading POS Queue...'),
-                error: (err, __) => Center(child: Text('Error loading POS queue: $err')),
+                error: (err, __) => EmptyState(
+                  title: 'Could not load dispensing queue',
+                  description: 'Check your connection and try again.',
+                  icon: Icons.cloud_off_rounded,
+                  actionLabel: 'Retry',
+                  onActionPressed: () => ref.invalidate(pendingPrescriptionsProvider),
+                ),
               ),
             ),
           ),
 
           // Right Panel: Dispensation Checkout detail
-          Expanded(
+          if (!compact || _selectedPrescription != null)
+            Expanded(
             flex: 3,
             child: _selectedPrescription == null
                 ? const EmptyState(
@@ -267,9 +288,23 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          'Checkout Details',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        Row(
+                          children: [
+                            if (compact)
+                              IconButton(
+                                tooltip: 'Back to queue',
+                                onPressed: () => setState(() {
+                                  _selectedPrescription = null;
+                                  _selectedBatches.clear();
+                                }),
+                                icon: const Icon(Icons.arrow_back_rounded),
+                              ),
+                            Text(
+                              'Checkout Details',
+                              style: theme.textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
                         
@@ -361,7 +396,9 @@ class _PharmacyPosScreenState extends ConsumerState<PharmacyPosScreen> {
                     ),
                   ),
           ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

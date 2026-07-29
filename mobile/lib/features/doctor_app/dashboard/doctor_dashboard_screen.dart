@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../hours/doctor_hours_screen.dart';
+import '../../patient_app/notifications/notifications_hub_screen.dart';
 import '../patients/doctor_patients_screen.dart';
 import '../prescription_writer/write_prescription_screen.dart';
 import '../profile/doctor_profile_screen.dart';
@@ -18,6 +20,7 @@ class DoctorDashboardScreen extends ConsumerStatefulWidget {
 
 class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
   int _currentIndex = 0;
+  DateTime? _lastBackPress;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +35,26 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
       const DoctorProfileScreen(),
     ];
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPress != null &&
+            now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+          return;
+        }
+        _lastBackPress = now;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Press back again to exit')),
+        );
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -67,7 +89,10 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
-            onPressed: () {},
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsHubScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: AppColors.textPrimary),
@@ -113,6 +138,7 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -132,6 +158,7 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
                   'Today\'s total queue',
                   AppColors.primary,
                   Icons.calendar_month,
+                  () => setState(() => _currentIndex = 1),
                 ),
               ),
               const SizedBox(width: 16),
@@ -142,6 +169,10 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
                   'Needs dispensation',
                   AppColors.warning,
                   Icons.medication,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WritePrescriptionScreen()),
+                  ),
                 ),
               ),
             ],
@@ -156,16 +187,18 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
                   'In-patient logs',
                   AppColors.success,
                   Icons.airline_seat_flat_angled_rounded,
+                  () => setState(() => _currentIndex = 2),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildMetricCard(
                   'Consult Fee',
-                  '\$1,200',
+                  '₹1,200',
                   'Accrued revenue',
                   AppColors.secondary,
                   Icons.account_balance_wallet,
+                  () => setState(() => _currentIndex = 4),
                 ),
               ),
             ],
@@ -227,8 +260,10 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
     String caption,
     Color color,
     IconData icon,
+    VoidCallback onTap,
   ) {
     return AppCard(
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -279,6 +314,7 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: AppCard(
+        onTap: () => setState(() => _currentIndex = 1),
         backgroundColor: isActive ? Colors.blue.shade50.withOpacity(0.5) : Colors.white,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,17 +381,6 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
                             );
                           },
                           child: const Text('Start Visit', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.grey),
-                            foregroundColor: AppColors.textPrimary,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                          onPressed: () {},
-                          child: const Text('EMR History', style: TextStyle(fontSize: 12)),
                         ),
                       ],
                     ),

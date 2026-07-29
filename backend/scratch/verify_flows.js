@@ -1,6 +1,6 @@
 const http = require('http');
 
-function request(method, path, body, roleToken = 'mock-super_admin-admin_pharmastore.com') {
+function request(method, path, body, roleToken = 'mock-super_admin') {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : '';
     const options = {

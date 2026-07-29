@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 
@@ -183,7 +184,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         Text(
-                          '${widget.specialty} • consultation fee \$${widget.fee.toStringAsFixed(0)}',
+                          '${widget.specialty} • consultation fee ${formatCurrency(widget.fee)}',
                           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                         ),
                       ],

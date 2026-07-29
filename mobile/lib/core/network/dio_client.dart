@@ -21,9 +21,8 @@ final dioClientPrv = Provider<Dio>((ref) {
       onRequest: (options, handler) {
         final authState = ref.read(authStatePrv);
         if (authState.isAuthenticated) {
-          // Attach mock credentials parsed by FirebaseAuthGuard in local development
-          options.headers['Authorization'] =
-              'Bearer mock-${authState.role}-${authState.email.replaceAll('@', '_')}';
+          // Opaque mock session token — role only, no email/PII in the header.
+          options.headers['Authorization'] = 'Bearer mock-${authState.role}';
         }
         return handler.next(options);
       },

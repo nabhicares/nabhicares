@@ -31,7 +31,7 @@ export class EMRController {
   @Get('patient/:patientId')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'patient')
   @ApiOperation({ summary: 'Retrieve complete EMR history for a patient' })
-  findPatientEMR(@Param('patientId') patientId: string) {
-    return this.emrService.findPatientEMR(patientId);
+  findPatientEMR(@Param('patientId') patientId: string, @CurrentUser() user: any) {
+    return this.emrService.findPatientEMR(patientId, user);
   }
 }

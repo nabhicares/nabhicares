@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, ValidateIf } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateDoctorDto {
   @ApiProperty({ example: 'Dr. Gregory House' })
@@ -7,23 +7,45 @@ export class CreateDoctorDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 'house@hospital.com' })
+  @ApiPropertyOptional({ example: 'house@hospital.com' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ example: 'Diagnostics' })
+  @ValidateIf((o) => !o.specialization)
   @IsNotEmpty()
   @IsString()
-  email: string;
+  specialty?: string;
 
-  @ApiProperty({ example: 'Diagnostics' })
+  @ApiPropertyOptional({ example: 'Diagnostics', description: 'Alias for specialty' })
+  @ValidateIf((o) => !o.specialty)
   @IsNotEmpty()
   @IsString()
-  specialty: string;
+  specialization?: string;
 
-  @ApiProperty({ example: 150 })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ example: 150 })
+  @IsOptional()
   @IsNumber()
-  consultationFee: number;
+  consultationFee?: number;
 
-  @ApiProperty({ example: 'MD, Board Certified Diagnostics', required: false })
+  @ApiPropertyOptional({ example: 'MD, Board Certified Diagnostics' })
   @IsOptional()
   @IsString()
   qualifications?: string;
+
+  @ApiPropertyOptional({ example: 'HOSP-001' })
+  @IsOptional()
+  @IsString()
+  hospitalId?: string;
+
+  @ApiPropertyOptional({ example: '+919800000099' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: 5, description: 'Commission % on referred credit sales' })
+  @IsOptional()
+  @IsNumber()
+  commissionRate?: number;
 }

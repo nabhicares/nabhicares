@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsArray, IsNumber, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsString, IsArray, IsNumber, ValidateNested, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -31,4 +31,9 @@ export class CreatePurchaseOrderDto {
   @ValidateNested({ each: true })
   @Type(() => PurchaseItemDto)
   items: PurchaseItemDto[];
+
+  @ApiProperty({ example: 'HOSP-001', required: false })
+  @IsOptional()
+  @IsString()
+  hospitalId?: string;
 }

@@ -130,7 +130,45 @@ class _BookingCard extends StatelessWidget {
       _ => StatusTone.info,
     };
 
-    return Container(
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (_) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(appointment.doctorName,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text('${formatDate(appointment.date)} · ${appointment.timeSlot}'),
+              const SizedBox(height: 6),
+              Text('Status: ${appointment.status.toUpperCase()}',
+                  style: const TextStyle(color: AppColors.textSecondary)),
+              if (onCancel != null && appointment.status == 'booked') ...[
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onCancel!();
+                    },
+                    style: TextButton.styleFrom(foregroundColor: AppColors.critical),
+                    child: const Text('Cancel booking'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      child: Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -169,6 +207,7 @@ class _BookingCard extends StatelessWidget {
           ],
         ],
       ),
+    ),
     );
   }
 }

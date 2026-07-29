@@ -6,6 +6,7 @@ import { SetScheduleDto } from './dto/set-schedule.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Doctors')
 @Controller('doctors')
@@ -24,22 +25,37 @@ export class DoctorsController {
   @Get()
   @Roles('super_admin', 'hospital_admin', 'doctor', 'receptionist', 'pharmacist', 'patient')
   @ApiOperation({ summary: 'Retrieve all doctor records' })
-  findAll() {
-    return this.doctorsService.findAll();
+  findAll(
+    @CurrentUser() user: any,
+    @Query('hospitalId') hospitalId?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.doctorsService.findAll(user.role, hospitalId, page, limit);
+  }
+
+  @Get(':id/credits')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Credit ledger for sales referred by this doctor' })
+  getCredits(
+    @Param('id') id: string,
+    @Query('hospitalId') hospitalId?: string,
+  ) {
+    return this.doctorsService.getCredits(id, hospitalId);
   }
 
   @Get(':id')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'receptionist', 'pharmacist', 'patient')
   @ApiOperation({ summary: 'Retrieve details of a single physician' })
-  findOne(@Param('id') id: string) {
-    return this.doctorsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.doctorsService.findOne(id, user.role);
   }
 
   @Put(':id/schedule')
   @Roles('super_admin', 'hospital_admin', 'doctor')
   @ApiOperation({ summary: 'Register consultation availability schedules' })
-  setSchedule(@Param('id') id: string, @Body() dto: SetScheduleDto) {
-    return this.doctorsService.setSchedule(id, dto);
+  setSchedule(@Param('id') id: string, @Body() dto: SetScheduleDto, @CurrentUser() user: any) {
+    return this.doctorsService.setSchedule(id, dto, user);
   }
 
   @Get(':id/slots')

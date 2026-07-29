@@ -55,14 +55,34 @@ export class PurchasesController {
     return this.purchasesService.createPurchaseOrder(dto);
   }
 
+  /** Alias: POST /purchases — same create-order /info step. */
+  @Post()
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Create purchase order (supplier + items)' })
+  createPurchase(@Body() dto: CreatePurchaseOrderDto) {
+    return this.purchasesService.createPurchaseOrder(dto);
+  }
+
+  @Get('history')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Full purchase history list' })
+  getHistory(
+    @Query('hospitalId') hospitalId?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.purchasesService.getPurchaseHistory(hospitalId, page, limit);
+  }
+
   @Get('orders')
   @Roles('super_admin', 'hospital_admin', 'pharmacist')
   @ApiOperation({ summary: 'Retrieve list of all purchase orders' })
   getOrders(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('hospitalId') hospitalId?: string,
   ) {
-    return this.purchasesService.getPurchaseOrders(page, limit);
+    return this.purchasesService.getPurchaseOrders(page, limit, hospitalId);
   }
 
   @Get('orders/:id')

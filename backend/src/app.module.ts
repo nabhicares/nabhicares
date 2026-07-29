@@ -15,6 +15,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ReportsModule } from './modules/reports/reports.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { SalesModule } from './modules/sales/sales.module';
+import { ProfileModule } from './modules/profile/profile.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { SettingsModule } from './modules/settings/settings.module';
     ReportsModule,
     PharmacyModule,
     SettingsModule,
+    ProfileModule,
+    SalesModule,
   ],
 })
 export class AppModule {}

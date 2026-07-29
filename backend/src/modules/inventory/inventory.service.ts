@@ -4,6 +4,8 @@ import { CreateMedicineDto } from './dto/create-medicine.dto';
 import { UpdateMedicineDto } from './dto/update-medicine.dto';
 import { AddBatchDto } from './dto/add-batch.dto';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
+import { ManualStockAddDto } from './dto/manual-stock-add.dto';
+import { applyStockChange } from './stock-mutation';
 
 @Injectable()
 export class InventoryService {
@@ -114,121 +116,186 @@ export class InventoryService {
     return medicines.filter((m: any) => m.status === 'active' && m.totalQuantity <= m.reorderLevel);
   }
 
-  async addBatch(medicineId: string, dto: AddBatchDto) {
+  async addBatch(medicineId: string, dto: AddBatchDto, hospitalId = 'default') {
     if (dto.quantity <= 0) {
       throw new BadRequestException('Batch quantity must be greater than 0.');
     }
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const expiry = new Date(dto.expiryDate);
-    if (isNaN(expiry.getTime()) || expiry < now) {
-      throw new BadRequestException('Expiry date must be a valid date and cannot be in the past.');
-    }
-
     return this.firestore.runTransaction(async (transaction) => {
-      const medRef = this.firestore.collection('medicines').doc(medicineId);
-      const medDoc = await transaction.get(medRef);
-      if (!medDoc.exists) {
-        throw new NotFoundException(`Medicine with ID ${medicineId} does not exist.`);
-      }
-      const medData = medDoc.data()!;
-      if (medData.status === 'inactive') {
-        throw new BadRequestException(`Cannot add batch to inactive medicine SKU: ${medData.name}.`);
-      }
-
-      const batchRef = medRef.collection('batches').doc(dto.batchNo);
-      const batchDoc = await transaction.get(batchRef);
-
-      let newQty = dto.quantity;
-      if (batchDoc.exists) {
-        const existingBatch = batchDoc.data()!;
-        if (existingBatch.expiryDate !== dto.expiryDate || existingBatch.unitPrice !== dto.unitPrice) {
-          throw new ConflictException(
-            `Batch ${dto.batchNo} already exists with a different expiry date (${existingBatch.expiryDate}) or unit price (${existingBatch.unitPrice}).`
-          );
-        }
-        newQty += existingBatch.quantity;
-      }
-
-      const batch = {
-        batchNo: dto.batchNo,
-        expiryDate: dto.expiryDate,
-        quantity: newQty,
-        unitPrice: dto.unitPrice,
-        updatedAt: new Date().toISOString(),
-      };
-
-      transaction.set(batchRef, batch);
-
-      const newTotal = medData.totalQuantity + dto.quantity;
-      transaction.update(medRef, { totalQuantity: newTotal });
-
-      const txRef = this.firestore.collection('stockTransactions').doc();
-      const tx = {
-        id: txRef.id,
+      const result = await applyStockChange(this.firestore, transaction, {
         medicineId,
-        medicineName: medData.name,
         batchNo: dto.batchNo,
-        type: 'purchase',
         quantityChange: dto.quantity,
+        type: 'purchase',
         reason: 'purchase_order_receipt',
-        createdAt: new Date().toISOString(),
+        hospitalId,
+        expiryDate: dto.expiryDate,
+        unitPrice: dto.unitPrice,
+      });
+      return {
+        medicineId,
+        batch: {
+          batchNo: result.batchNo,
+          quantity: result.batchQuantity,
+          expiryDate: dto.expiryDate,
+          unitPrice: dto.unitPrice,
+        },
+        totalQuantity: result.totalQuantity,
       };
-
-      transaction.set(txRef, tx);
-      return { medicineId, batch, totalQuantity: newTotal };
     });
   }
 
-  async adjustStock(userId: string, dto: AdjustStockDto) {
+  async manualAddStock(dto: ManualStockAddDto) {
+    if (dto.qty <= 0) {
+      throw new BadRequestException('qty must be greater than 0.');
+    }
+    return this.firestore.runTransaction(async (transaction) => {
+      return applyStockChange(this.firestore, transaction, {
+        medicineId: dto.medicineId,
+        batchNo: dto.batchNo,
+        quantityChange: dto.qty,
+        type: 'manual_add',
+        reason: 'manual_stock_add',
+        hospitalId: dto.hospitalId,
+        expiryDate: dto.expiryDate,
+        unitPrice: dto.unitPrice ?? 0,
+      });
+    });
+  }
+
+  async getBatchByNo(batchNo: string, hospitalId?: string) {
+    const txSnap = await this.firestore.collection('stockTransactions').where('batchNo', '==', batchNo).get();
+    let txs = txSnap.docs.map((d) => d.data());
+    if (hospitalId) {
+      txs = txs.filter((t: any) => !t.hospitalId || t.hospitalId === hospitalId);
+    }
+    if (txs.length === 0) {
+      throw new NotFoundException(`No stock transactions found for batch ${batchNo}.`);
+    }
+
+    const purchaseTxs = txs.filter((t: any) => t.quantityChange > 0);
+    const saleTxs = txs.filter((t: any) => t.type === 'sale' || t.quantityChange < 0);
+    const latest = [...txs].sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))[0];
+    const medicineId = latest.medicineId;
+
+    let batchLive: any = null;
+    try {
+      const batchDoc = await this.firestore
+        .collection('medicines')
+        .doc(medicineId)
+        .collection('batches')
+        .doc(batchNo)
+        .get();
+      if (batchDoc.exists) batchLive = batchDoc.data();
+    } catch {
+      /* ignore */
+    }
+
+    const quantityReceived = purchaseTxs.reduce((s: number, t: any) => s + (t.quantityChange || 0), 0);
+    const poIds = purchaseTxs
+      .map((t: any) => (t.purchaseOrderId ? String(t.purchaseOrderId) : ''))
+      .filter((id: string) => id.length > 0)
+      .filter((id: string, i: number, arr: string[]) => arr.indexOf(id) === i);
+
+    let supplier: any = null;
+    let purchaseOrderId: string | null = poIds.length ? poIds[0] : null;
+    if (purchaseOrderId) {
+      const poDoc = await this.firestore.collection('purchaseOrders').doc(purchaseOrderId).get();
+      if (poDoc.exists) {
+        const po = poDoc.data()!;
+        supplier = { id: po.supplierId, name: po.supplierName };
+      }
+    } else {
+      const withSupplier = purchaseTxs.find((t: any) => t.supplierName);
+      if (withSupplier) {
+        supplier = { id: withSupplier.supplierId || null, name: withSupplier.supplierName };
+      }
+    }
+
+    // Also scan POs that mention this batch in receive history via stock tx purchaseOrderId already covered.
+    return {
+      batchNo,
+      medicineId,
+      medicineName: latest.medicineName,
+      expiryDate: batchLive?.expiryDate || latest.expiryDate || null,
+      quantityReceived,
+      quantityRemaining: batchLive?.quantity ?? Math.max(0, quantityReceived + saleTxs.reduce((s: number, t: any) => s + (t.quantityChange || 0), 0)),
+      supplier,
+      purchaseOrderId,
+      sales: saleTxs.map((t: any) => ({
+        stockTransactionId: t.id,
+        saleId: t.saleId,
+        quantityChange: t.quantityChange,
+        createdAt: t.createdAt,
+      })),
+      stockTransactions: txs,
+    };
+  }
+
+  async getExpiryList(hospitalId: string, thresholdDays = 30) {
+    const medsSnapshot = await this.firestore.collection('medicines').get();
+    let medicines = medsSnapshot.docs.map((doc) => doc.data());
+    if (hospitalId) {
+      medicines = medicines.filter(
+        (m: any) => !m.hospitalId || m.hospitalId === hospitalId,
+      );
+    }
+
+    const now = new Date();
+    const limitDate = new Date();
+    limitDate.setDate(now.getDate() + Number(thresholdDays));
+    const items: any[] = [];
+
+    for (const med of medicines) {
+      if (med.status !== 'active') continue;
+      const batchesSnapshot = await this.firestore
+        .collection('medicines')
+        .doc(med.id)
+        .collection('batches')
+        .get();
+      for (const batchDoc of batchesSnapshot.docs) {
+        const batch = batchDoc.data();
+        if (!batch.expiryDate || !(batch.quantity > 0)) continue;
+        if (hospitalId && batch.hospitalId && batch.hospitalId !== hospitalId) continue;
+        const expiry = new Date(batch.expiryDate);
+        if (expiry >= now && expiry <= limitDate) {
+          items.push({
+            medicineId: med.id,
+            medicineName: med.name,
+            batchNo: batch.batchNo,
+            quantity: batch.quantity,
+            expiryDate: batch.expiryDate,
+            unitPrice: batch.unitPrice,
+            hospitalId: batch.hospitalId || med.hospitalId || hospitalId,
+            daysUntilExpiry: Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+          });
+        }
+      }
+    }
+
+    items.sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+    return items;
+  }
+
+  async adjustStock(userId: string, dto: AdjustStockDto, hospitalId = 'default') {
     const { medicineId, batchNo, quantityChange, reason } = dto;
 
     return this.firestore.runTransaction(async (transaction) => {
-      const medRef = this.firestore.collection('medicines').doc(medicineId);
-      const medDoc = await transaction.get(medRef);
-      if (!medDoc.exists) {
-        throw new NotFoundException(`Medicine with ID ${medicineId} does not exist.`);
-      }
-      const medData = medDoc.data()!;
-      if (medData.status === 'inactive') {
-        throw new BadRequestException(`Cannot adjust stock for inactive medicine SKU: ${medData.name}.`);
-      }
-
-      const batchRef = medRef.collection('batches').doc(batchNo);
-      const batchDoc = await transaction.get(batchRef);
-      if (!batchDoc.exists) {
-        throw new NotFoundException(`Batch ${batchNo} not found for Medicine ${medicineId}.`);
-      }
-      const batchData = batchDoc.data()!;
-
-      const newBatchQty = batchData.quantity + quantityChange;
-      if (newBatchQty < 0) {
-        throw new BadRequestException(
-          `Cannot adjust stock below 0. Current batch qty: ${batchData.quantity}, requested change: ${quantityChange}`,
-        );
-      }
-
-      transaction.update(batchRef, { quantity: newBatchQty });
-
-      const newTotal = medData.totalQuantity + quantityChange;
-      transaction.update(medRef, { totalQuantity: newTotal });
-
-      const txRef = this.firestore.collection('stockTransactions').doc();
-      const tx = {
-        id: txRef.id,
+      const result = await applyStockChange(this.firestore, transaction, {
         medicineId,
-        medicineName: medData.name,
         batchNo,
-        type: 'adjustment',
         quantityChange,
+        type: 'adjustment',
         reason,
+        hospitalId,
         userId,
-        createdAt: new Date().toISOString(),
+      });
+      return {
+        medicineId,
+        batchNo,
+        quantityChange,
+        newTotal: result.totalQuantity,
       };
-
-      transaction.set(txRef, tx);
-      return { medicineId, batchNo, quantityChange, newTotal };
     });
   }
 

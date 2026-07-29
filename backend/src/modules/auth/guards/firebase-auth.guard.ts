@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { isProductionRuntime, isDemoMode } from '../../../common/config/env.validation';
 
 @Injectable()
 export class FirebaseAuthGuard implements CanActivate {
@@ -14,29 +15,38 @@ export class FirebaseAuthGuard implements CanActivate {
     const token = authHeader.split('Bearer ')[1];
 
     try {
-      // Mock tokens are for local/dev testing. Production blocks them unless
-      // ALLOW_MOCK_AUTH=true is explicitly set (e.g. on a staging Vercel env).
+      // Mock tokens when ALLOW_MOCK_AUTH/ALLOW_DEMO_MODE is on (incl. Vercel demo),
+      // or local when Firebase key is missing/mock.
       const allowMockAuth =
-        process.env.ALLOW_MOCK_AUTH?.trim() === 'true' ||
-        (process.env.NODE_ENV !== 'production' &&
+        isDemoMode() ||
+        (!isProductionRuntime() &&
           (!process.env.FIREBASE_PRIVATE_KEY ||
             process.env.FIREBASE_PRIVATE_KEY.includes('MOCK_KEY')));
 
       const isMockMode = allowMockAuth && token.startsWith('mock-');
-      
+
       if (isMockMode) {
-        // Parse custom mock roles directly from token for developer testing
-        let role = 'patient';
-        if (token.includes('doctor')) role = 'doctor';
-        else if (token.includes('admin')) role = 'hospital_admin';
-        else if (token.includes('pharmacist')) role = 'pharmacist';
-        else if (token.includes('receptionist')) role = 'receptionist';
+        const knownRoles = [
+          'super_admin',
+          'hospital_admin',
+          'pharmacist',
+          'receptionist',
+          'doctor',
+          'patient',
+        ] as const;
+        let role: (typeof knownRoles)[number] = 'patient';
+        for (const r of knownRoles) {
+          if (token === `mock-${r}` || token.startsWith(`mock-${r}-`)) {
+            role = r;
+            break;
+          }
+        }
 
         request.user = {
-          uid: token,
-          email: `${token}@example.com`,
-          role: role,
-          name: `Mock ${role.replace('_', ' ').toUpperCase()}`,
+          uid: `mock-${role}`,
+          email: null,
+          role,
+          name: `Demo ${role.replace(/_/g, ' ')}`,
         };
         return true;
       }
@@ -49,8 +59,8 @@ export class FirebaseAuthGuard implements CanActivate {
         name: decodedToken.name,
       };
       return true;
-    } catch (error) {
-      throw new UnauthorizedException(`Failed to verify authorization token: ${error.message}`);
+    } catch {
+      throw new UnauthorizedException('Failed to verify authorization token.');
     }
   }
 }

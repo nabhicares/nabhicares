@@ -4,6 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../../../shared_models/app_notification.dart';
 import '../../../shared_models/appointment.dart';
 import '../../../shared_models/doctor_profile.dart';
+import '../../../shared_models/invoice.dart';
 import '../../../shared_models/patient_record.dart';
 import '../../../shared_models/prescription.dart';
 import '../../../shared_models/user_profile.dart';
@@ -45,6 +46,49 @@ class CareRepository {
     return PatientRecord.fromJson(result.map);
   }
 
+  Future<PatientRecord> createPatient(Map<String, dynamic> body) async {
+    final result = await _api.post('/patients', body: body);
+    return PatientRecord.fromJson(result.map);
+  }
+
+  Future<PatientRecord> updatePatient(String id, Map<String, dynamic> body) async {
+    final result = await _api.put('/patients/$id', body: body);
+    return PatientRecord.fromJson(result.map);
+  }
+
+  Future<Appointment> bookAppointment({
+    required String patientId,
+    required String doctorId,
+    required String date,
+    required String timeSlot,
+  }) async {
+    final result = await _api.post('/appointments', body: {
+      'patientId': patientId,
+      'doctorId': doctorId,
+      'date': date,
+      'timeSlot': timeSlot,
+    });
+    return Appointment.fromJson(result.map);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchDoctorSlots(String doctorId, String date) async {
+    final result = await _api.get('/doctors/$doctorId/slots', query: {'date': date});
+    return (result.data as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  Future<void> recordPayment({
+    required String invoiceId,
+    required double amount,
+    required String method,
+  }) async {
+    await _api.post('/billing/invoices/$invoiceId/pay', body: {
+      'amount': amount,
+      'method': method,
+    });
+  }
+
   Future<List<DoctorProfile>> fetchDoctors() async {
     final result = await _api.get('/doctors');
     return result.list.map(DoctorProfile.fromJson).toList();
@@ -76,6 +120,11 @@ class CareRepository {
     return result.list.map(Prescription.fromJson).toList();
   }
 
+  Future<List<Invoice>> fetchPatientInvoices(String patientId) async {
+    final result = await _api.get('/billing/invoices/patient/$patientId');
+    return result.list.map(Invoice.fromJson).toList();
+  }
+
   Future<List<AppNotification>> fetchNotifications() async {
     final result = await _api.get('/notifications');
     return result.list.map(AppNotification.fromJson).toList();
@@ -84,6 +133,10 @@ class CareRepository {
   Future<UserProfile> fetchMe() async {
     final result = await _api.get('/users/me');
     return UserProfile.fromJson(result.map);
+  }
+
+  Future<void> deleteMyAccount() async {
+    await _api.delete('/users/me');
   }
 }
 
@@ -113,6 +166,10 @@ final doctorProfilePrv = FutureProvider.autoDispose<DoctorProfile>((ref) {
 
 final patientPrescriptionsPrv = FutureProvider.autoDispose<List<Prescription>>((ref) {
   return ref.watch(careRepositoryPrv).fetchPatientPrescriptions(CareDemoIds.patientId);
+});
+
+final patientInvoicesPrv = FutureProvider.autoDispose<List<Invoice>>((ref) {
+  return ref.watch(careRepositoryPrv).fetchPatientInvoices(CareDemoIds.patientId);
 });
 
 final notificationsPrv = FutureProvider.autoDispose<List<AppNotification>>((ref) {

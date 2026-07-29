@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FirestoreService } from '../../database/firestore.service';
 import { CreateConsultationDto } from './dto/create-consultation.dto';
+import { assertPatientRecordAccess, AuthUser } from '../../common/privacy/patient-access';
 
 @Injectable()
 export class EMRService {
@@ -28,7 +29,6 @@ export class EMRService {
       createdAt: new Date().toISOString(),
     };
 
-    // Update appointment status to completed inside this consult trigger
     await appRef.update({ status: 'completed' });
     await consultRef.set(consultation);
 
@@ -43,7 +43,10 @@ export class EMRService {
     return doc.data();
   }
 
-  async findPatientEMR(patientId: string) {
+  async findPatientEMR(patientId: string, user?: AuthUser) {
+    if (user) {
+      await assertPatientRecordAccess(this.firestore, patientId, user);
+    }
     const snapshot = await this.firestore
       .collection('consultations')
       .where('patientId', '==', patientId)

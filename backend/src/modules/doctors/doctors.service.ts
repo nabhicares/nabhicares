@@ -2,6 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { FirestoreService } from '../../database/firestore.service';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
 import { SetScheduleDto } from './dto/set-schedule.dto';
+import { doctorViewForRole, staffDoctorView } from '../../common/privacy/sanitize';
+import { assertDoctorResourceAccess } from '../../common/privacy/doctor-access';
+import { AuthUser } from '../../common/privacy/patient-access';
 
 @Injectable()
 export class DoctorsService {
@@ -14,32 +17,88 @@ export class DoctorsService {
     const doctor = {
       id: newDocRef.id,
       name: dto.name,
-      email: dto.email,
-      specialty: dto.specialty,
-      consultationFee: dto.consultationFee,
+      email: dto.email || '',
+      specialty: dto.specialty || dto.specialization || '',
+      specialization: dto.specialization || dto.specialty || '',
+      consultationFee: dto.consultationFee ?? 0,
       qualifications: dto.qualifications || null,
+      hospitalId: dto.hospitalId || 'default',
+      phone: dto.phone || null,
+      commissionRate: dto.commissionRate ?? 0,
+      creditBalance: 0,
       createdAt: new Date().toISOString(),
     };
 
     await newDocRef.set(doctor);
-    return doctor;
+    return staffDoctorView(doctor);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, role = 'hospital_admin') {
     const doc = await this.firestore.collection('doctors').doc(id).get();
     if (!doc.exists) {
       throw new NotFoundException(`Doctor with ID ${id} does not exist.`);
     }
-    return doc.data();
+    return doctorViewForRole(doc.data(), role);
   }
 
-  async findAll() {
+  /** Internal raw read for schedule/slots — not returned to clients directly. */
+  private async findOneRaw(id: string) {
+    const doc = await this.firestore.collection('doctors').doc(id).get();
+    if (!doc.exists) {
+      throw new NotFoundException(`Doctor with ID ${id} does not exist.`);
+    }
+    return doc.data()!;
+  }
+
+  async findAll(
+    role = 'hospital_admin',
+    hospitalId?: string,
+    page?: number,
+    limit?: number,
+  ) {
     const snapshot = await this.firestore.collection('doctors').get();
-    return snapshot.docs.map((doc) => doc.data());
+    let list = snapshot.docs.map((doc) => doctorViewForRole(doc.data(), role));
+    if (hospitalId) {
+      list = list.filter((d: any) => !d.hospitalId || d.hospitalId === hospitalId);
+    }
+
+    // Paginate when page/limit requested; otherwise keep legacy array for CareFlow clients.
+    if (page == null && limit == null) {
+      return list;
+    }
+
+    const pageNum = Number(page) > 0 ? Number(page) : 1;
+    const limitNum = Number(limit) > 0 ? Number(limit) : 20;
+    const start = (pageNum - 1) * limitNum;
+    return {
+      items: list.slice(start, start + limitNum),
+      meta: {
+        totalCount: list.length,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(list.length / limitNum),
+      },
+    };
   }
 
-  async setSchedule(id: string, dto: SetScheduleDto) {
-    await this.findOne(id);
+  async getCredits(doctorId: string, hospitalId?: string) {
+    await this.findOneRaw(doctorId);
+    const snap = await this.firestore.collection('creditLedger').get();
+    let list = snap.docs
+      .map((d) => d.data())
+      .filter((e: any) => e.doctorId === doctorId);
+    if (hospitalId) {
+      list = list.filter((e: any) => e.hospitalId === hospitalId);
+    }
+    list.sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const openBalance = list
+      .filter((e: any) => e.status === 'open')
+      .reduce((s: number, e: any) => s + Number(e.balance || e.amount || 0), 0);
+    return { doctorId, openBalance, entries: list };
+  }
+
+  async setSchedule(id: string, dto: SetScheduleDto, user: AuthUser) {
+    await assertDoctorResourceAccess(this.firestore, id, user);
 
     const scheduleRef = this.firestore
       .collection('doctors')
@@ -57,7 +116,7 @@ export class DoctorsService {
   }
 
   async getSchedule(id: string) {
-    await this.findOne(id);
+    await this.findOneRaw(id);
 
     const doc = await this.firestore
       .collection('doctors')
@@ -71,7 +130,7 @@ export class DoctorsService {
     }
 
     // Fall back to legacy weeklySchedule map seeded on the doctor document.
-    const doctor = await this.findOne(id);
+    const doctor = await this.findOneRaw(id);
     const legacy = doctor?.weeklySchedule as Record<string, string[]> | undefined;
     if (legacy && typeof legacy === 'object') {
       const weeklySchedules: Array<{ dayOfWeek: string; startTime: string; endTime: string }> = [];
@@ -90,7 +149,7 @@ export class DoctorsService {
   }
 
   async getAvailableSlots(id: string, date: string) {
-    await this.findOne(id);
+    await this.findOneRaw(id);
 
     const schedule = await this.getSchedule(id);
     const parsedDate = new Date(date);

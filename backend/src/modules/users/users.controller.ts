@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Headers, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Headers,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserProfileDto } from './dto/create-user-profile.dto';
@@ -27,8 +35,8 @@ export class UsersController {
   @UseGuards(FirebaseAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Assign user custom claims role (Admin/Super-Admin only)' })
-  assignRole(@Body() dto: AssignRoleDto) {
-    return this.usersService.assignRole(dto);
+  assignRole(@CurrentUser() user: any, @Body() dto: AssignRoleDto) {
+    return this.usersService.assignRole(dto, user);
   }
 
   @Get('me')
@@ -37,6 +45,22 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile data' })
   me(@CurrentUser() user: any) {
     return this.usersService.getProfile(user.uid);
+  }
+
+  @Delete('me')
+  @UseGuards(FirebaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete / anonymize the current user account and linked personal data' })
+  deleteMe(@CurrentUser() user: any) {
+    return this.usersService.deleteMyAccount(user.uid);
+  }
+
+  @Post('logout')
+  @UseGuards(FirebaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke Firebase refresh tokens for the current user' })
+  logout(@CurrentUser() user: any) {
+    return this.usersService.logout(user.uid);
   }
 
   @Post('bootstrap')

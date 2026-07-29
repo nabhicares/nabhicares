@@ -1,18 +1,27 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { ConfigService } from '@nestjs/config';
+import { isProductionRuntime, isDemoMode } from '../common/config/env.validation';
 
-// In-Memory Mock Store Classes representing Firestore
+// In-Memory Mock Store Classes representing Firestore (local/dev only)
 class MockDocumentSnapshot {
   constructor(public id: string, private _data: any) {}
-  get exists() { return this._data !== undefined; }
-  data() { return this._data ? JSON.parse(JSON.stringify(this._data)) : undefined; }
+  get exists() {
+    return this._data !== undefined;
+  }
+  data() {
+    return this._data ? JSON.parse(JSON.stringify(this._data)) : undefined;
+  }
 }
 
 class MockQuerySnapshot {
   constructor(public docs: MockDocumentSnapshot[]) {}
-  get empty() { return this.docs.length === 0; }
-  get size() { return this.docs.length; }
+  get empty() {
+    return this.docs.length === 0;
+  }
+  get size() {
+    return this.docs.length;
+  }
 }
 
 class MockDocumentReference {
@@ -130,22 +139,44 @@ export class FirestoreService implements OnModuleInit {
   constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
+    const production = isProductionRuntime();
+    const demo = isDemoMode();
     const fs = require('fs');
     const path = require('path');
     const saPath = path.join(process.cwd(), 'firebase-service-account.json');
 
+    const normalizePrivateKey = (raw: string) =>
+      raw
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .replace(/\\n/g, '\n')
+        .replace(/\r/g, '');
+
+    const assertPrivateKeyUsable = (privateKey: string) => {
+      const crypto = require('crypto');
+      try {
+        crypto.createPrivateKey(privateKey);
+      } catch (err: any) {
+        throw new Error(
+          'FIREBASE_PRIVATE_KEY is invalid or truncated (OpenSSL cannot decode it). ' +
+            'Regenerate a service-account JSON key in Firebase Console → Project settings → Service accounts, ' +
+            'then set FIREBASE_PRIVATE_KEY to the full private_key value (with \\n newlines). ' +
+            `Detail: ${String(err?.message || 'decode failed').slice(0, 120)}`,
+        );
+      }
+    };
+
     let saCreds: any = null;
-    if (fs.existsSync(saPath)) {
+    if (!production && fs.existsSync(saPath)) {
       try {
         saCreds = JSON.parse(fs.readFileSync(saPath, 'utf8'));
-        console.log('[FirestoreService] Found local firebase-service-account.json file.');
-      } catch (err) {
-        console.warn('[FirestoreService] Failed to parse service-account.json:', err.message);
+      } catch {
+        console.warn('[FirestoreService] Failed to parse firebase-service-account.json');
       }
     }
 
     if (saCreds && saCreds.private_key) {
-      saCreds.private_key = saCreds.private_key.replace(/\\n/g, '\n');
+      saCreds.private_key = normalizePrivateKey(saCreds.private_key);
     }
 
     if (admin.apps.length === 0) {
@@ -154,14 +185,14 @@ export class FirestoreService implements OnModuleInit {
           admin.initializeApp({
             credential: admin.credential.cert(saCreds),
           });
-          console.log('[FirestoreService] Firebase Admin SDK initialized via service-account JSON.');
         } else {
-          const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
-          const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
+          const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID')?.trim();
+          const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL')?.trim();
           let privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
 
           if (projectId && clientEmail && privateKey) {
-            privateKey = privateKey.replace(/\\n/g, '\n');
+            privateKey = normalizePrivateKey(privateKey);
+            assertPrivateKeyUsable(privateKey);
             admin.initializeApp({
               credential: admin.credential.cert({
                 projectId,
@@ -169,16 +200,26 @@ export class FirestoreService implements OnModuleInit {
                 privateKey,
               }),
             });
-            console.log('[FirestoreService] Firebase Admin SDK initialized via environment variables.');
+          } else if (production && !demo) {
+            throw new Error(
+              'Firestore credentials missing. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.',
+            );
           } else {
             admin.initializeApp({
-              projectId: projectId || 'pharma-store-49792',
+              projectId: projectId || 'demo-pharma-store',
             });
-            console.log('[FirestoreService] Firebase Admin SDK initialized using local default credentials.');
           }
         }
-      } catch (error) {
-        console.warn('[FirestoreService] Firebase SDK initialization failed:', error.message);
+      } catch (error: any) {
+        if (production && !demo) {
+          throw new Error(
+            `Firebase Admin SDK failed to initialize: ${error?.message ?? 'unknown error'}`,
+          );
+        }
+        console.warn(
+          '[FirestoreService] Firebase SDK init failed; using in-memory mock store.',
+          error?.message ? String(error.message).slice(0, 160) : '',
+        );
         this.isMockMode = true;
       }
     }
@@ -186,17 +227,31 @@ export class FirestoreService implements OnModuleInit {
     if (!this.isMockMode) {
       try {
         this.db = admin.firestore();
-        this.db.settings({ ignoreUndefinedProperties: true });
-        
-        // Attempt verification query to trigger credential authorization checks
+        try {
+          this.db.settings({ ignoreUndefinedProperties: true });
+        } catch (settingsErr: any) {
+          const msg = String(settingsErr?.message || '');
+          if (!/already been initialized|settings\(\) can only be called once/i.test(msg)) {
+            throw settingsErr;
+          }
+        }
         await this.db.collection('settings').doc('systemConfiguration').get();
-        
         this.isMockMode = false;
-        console.log('[FirestoreService] Connected to real GCP Firestore database.');
-      } catch (e) {
-        console.warn('[FirestoreService] Failed to connect to real Firestore. Falling back to local IN-MEMORY mock store.');
+      } catch (e: any) {
+        const detail = e?.message ? String(e.message).slice(0, 300) : 'unknown error';
+        if (production && !demo) {
+          console.error('[FirestoreService] Firestore connection failed:', detail);
+          throw new Error(
+            `Unable to reach Firestore over TLS (${detail}). Check FIREBASE_* credentials — mock fallback is disabled in production.`,
+          );
+        }
+        console.warn('[FirestoreService] Firestore unreachable; using in-memory mock store.');
         this.isMockMode = true;
       }
+    }
+
+    if (production && this.isMockMode && !demo) {
+      throw new Error('In-memory mock Firestore is not allowed in production.');
     }
   }
 

@@ -32,15 +32,15 @@ export class PrescriptionsController {
   @Get('patient/:patientId')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist', 'patient')
   @ApiOperation({ summary: 'Retrieve historical prescriptions of a patient' })
-  findPatientPrescriptions(@Param('patientId') patientId: string) {
-    return this.prescriptionsService.findPatientPrescriptions(patientId);
+  findPatientPrescriptions(@Param('patientId') patientId: string, @CurrentUser() user: any) {
+    return this.prescriptionsService.findPatientPrescriptions(patientId, user);
   }
 
   @Get(':id')
   @Roles('super_admin', 'hospital_admin', 'doctor', 'pharmacist', 'patient')
   @ApiOperation({ summary: 'Retrieve detailed prescription outline' })
-  findOne(@Param('id') id: string) {
-    return this.prescriptionsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.prescriptionsService.findOne(id, user);
   }
 
   @Put(':id/dispense/:itemIndex')

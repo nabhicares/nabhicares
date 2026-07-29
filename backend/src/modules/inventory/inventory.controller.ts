@@ -45,6 +45,16 @@ export class InventoryController {
     return this.inventoryService.getAlerts(withinDays);
   }
 
+  @Get('expiry-list')
+  @Roles('super_admin', 'hospital_admin', 'pharmacist')
+  @ApiOperation({ summary: 'Dedicated expiry list sorted by nearest expiry (admin/staff)' })
+  getExpiryList(
+    @Query('hospitalId') hospitalId: string,
+    @Query('thresholdDays') thresholdDays?: number,
+  ) {
+    return this.inventoryService.getExpiryList(hospitalId || 'default', thresholdDays ?? 30);
+  }
+
   @Get('summary')
   @Roles('super_admin', 'hospital_admin', 'pharmacist')
   @ApiOperation({ summary: 'Get total dashboard summary of active inventory value and alert counts' })

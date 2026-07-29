@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { FirestoreService } from '../../database/firestore.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
+import { supplierView } from '../../common/privacy/sanitize';
+import { applyStockChanges } from '../inventory/stock-mutation';
 
 @Injectable()
 export class PurchasesService {
@@ -23,7 +25,7 @@ export class PurchasesService {
       createdAt: new Date().toISOString(),
     };
     await supplierRef.set(supplier);
-    return supplier;
+    return supplierView(supplier);
   }
 
   async findSupplier(id: string) {
@@ -31,7 +33,7 @@ export class PurchasesService {
     if (!doc.exists) {
       throw new NotFoundException(`Supplier with ID ${id} does not exist.`);
     }
-    return doc.data();
+    return supplierView(doc.data());
   }
 
   async updateSupplier(id: string, dto: UpdateSupplierDto) {
@@ -42,12 +44,12 @@ export class PurchasesService {
     }
     await supRef.update({ ...dto });
     const updated = await supRef.get();
-    return updated.data();
+    return supplierView(updated.data());
   }
 
   async findAllSuppliers(includeInactive?: string, page = 1, limit = 10) {
     const snapshot = await this.firestore.collection('suppliers').get();
-    let list = snapshot.docs.map((doc) => doc.data());
+    let list = snapshot.docs.map((doc) => supplierView(doc.data()));
     if (includeInactive !== 'true') {
       list = list.filter((s: any) => s.status !== 'inactive');
     }
@@ -67,6 +69,7 @@ export class PurchasesService {
   }
 
   async createPurchaseOrder(dto: CreatePurchaseOrderDto) {
+    const hospitalId = dto.hospitalId || 'default';
     const supDoc = await this.firestore.collection('suppliers').doc(dto.supplierId).get();
     if (!supDoc.exists) {
       throw new NotFoundException(`Supplier with ID ${dto.supplierId} does not exist.`);
@@ -90,6 +93,7 @@ export class PurchasesService {
     const orderRef = this.firestore.collection('purchaseOrders').doc();
     const order = {
       id: orderRef.id,
+      hospitalId,
       supplierId: dto.supplierId,
       supplierName: supDoc.data()!.name,
       items: itemsWithNames,
@@ -126,15 +130,18 @@ export class PurchasesService {
     return { id, status: 'cancelled' };
   }
 
-  async getPurchaseOrders(page = 1, limit = 10) {
+  async getPurchaseOrders(page = 1, limit = 10, hospitalId?: string) {
     const snapshot = await this.firestore.collection('purchaseOrders').get();
-    const list = snapshot.docs.map((doc) => doc.data());
-    
+    let list = snapshot.docs.map((doc) => doc.data());
+    if (hospitalId) {
+      list = list.filter((o: any) => !o.hospitalId || o.hospitalId === hospitalId);
+    }
+
     const pageNum = (page && !isNaN(Number(page)) && Number(page) > 0) ? Number(page) : 1;
     const limitNum = (limit && !isNaN(Number(limit)) && Number(limit) > 0) ? Number(limit) : 10;
     const startIndex = (pageNum - 1) * limitNum;
     const paginated = list.slice(startIndex, startIndex + limitNum);
-    
+
     return {
       items: paginated,
       meta: {
@@ -144,6 +151,14 @@ export class PurchasesService {
         totalPages: Math.ceil(list.length / limitNum),
       },
     };
+  }
+
+  async getPurchaseHistory(hospitalId?: string, page = 1, limit = 50) {
+    const result = await this.getPurchaseOrders(page, limit, hospitalId);
+    const items = [...result.items].sort((a: any, b: any) =>
+      (b.createdAt || '').localeCompare(a.createdAt || ''),
+    );
+    return { ...result, items };
   }
 
   async receivePurchaseOrder(orderId: string, dto: ReceivePurchaseOrderDto) {
@@ -159,7 +174,9 @@ export class PurchasesService {
         throw new BadRequestException(`Purchase order ${orderId} is already in state "${orderData.status}".`);
       }
 
+      const hospitalId = orderData.hospitalId || 'default';
       const updatedItems = [...orderData.items];
+      const stockInputs: Parameters<typeof applyStockChanges>[2] = [];
 
       for (const recItem of dto.items) {
         if (recItem.quantityReceived <= 0) {
@@ -174,67 +191,27 @@ export class PurchasesService {
         const totalReceived = (orderLineItem.quantityReceived || 0) + recItem.quantityReceived;
         if (totalReceived > orderLineItem.quantity) {
           throw new BadRequestException(
-            `Cannot receive more quantity than ordered for Medicine ${recItem.medicineId}. Ordered: ${orderLineItem.quantity}, Already Received: ${orderLineItem.quantityReceived || 0}, Incoming: ${recItem.quantityReceived}`
+            `Cannot receive more quantity than ordered for Medicine ${recItem.medicineId}. Ordered: ${orderLineItem.quantity}, Already Received: ${orderLineItem.quantityReceived || 0}, Incoming: ${recItem.quantityReceived}`,
           );
         }
         orderLineItem.quantityReceived = totalReceived;
 
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const expiry = new Date(recItem.expiryDate);
-        if (isNaN(expiry.getTime()) || expiry < now) {
-          throw new BadRequestException('Expiry date must be valid and cannot be in the past.');
-        }
-
-        const medRef = this.firestore.collection('medicines').doc(recItem.medicineId);
-        const medDoc = await transaction.get(medRef);
-        if (!medDoc.exists) {
-          throw new NotFoundException(`Medicine with ID ${recItem.medicineId} does not exist.`);
-        }
-        const medData = medDoc.data()!;
-        if (medData.status === 'inactive') {
-          throw new BadRequestException(`Cannot receive inventory for inactive medicine SKU: ${medData.name}.`);
-        }
-
-        const batchRef = medRef.collection('batches').doc(recItem.batchNo);
-        const batchDoc = await transaction.get(batchRef);
-
-        let newBatchQty = recItem.quantityReceived;
-        if (batchDoc.exists) {
-          const existingBatch = batchDoc.data()!;
-          if (existingBatch.expiryDate !== recItem.expiryDate || existingBatch.unitPrice !== orderLineItem.unitPrice) {
-            throw new ConflictException(
-              `Batch ${recItem.batchNo} already exists with a different expiry date (${existingBatch.expiryDate}) or unit price (${existingBatch.unitPrice}).`
-            );
-          }
-          newBatchQty += existingBatch.quantity;
-        }
-
-        const newBatch = {
-          batchNo: recItem.batchNo,
-          expiryDate: recItem.expiryDate,
-          quantity: newBatchQty,
-          unitPrice: orderLineItem.unitPrice,
-          updatedAt: new Date().toISOString(),
-        };
-        transaction.set(batchRef, newBatch);
-
-        const newTotal = medData.totalQuantity + recItem.quantityReceived;
-        transaction.update(medRef, { totalQuantity: newTotal });
-
-        const txRef = this.firestore.collection('stockTransactions').doc();
-        const tx = {
-          id: txRef.id,
+        stockInputs.push({
           medicineId: recItem.medicineId,
-          medicineName: medData.name,
           batchNo: recItem.batchNo,
-          type: 'purchase',
           quantityChange: recItem.quantityReceived,
+          type: 'purchase',
           reason: 'purchase_order_receipt',
-          createdAt: new Date().toISOString(),
-        };
-        transaction.set(txRef, tx);
+          hospitalId,
+          expiryDate: recItem.expiryDate,
+          unitPrice: orderLineItem.unitPrice,
+          purchaseOrderId: orderId,
+          supplierId: orderData.supplierId,
+          supplierName: orderData.supplierName,
+        });
       }
+
+      await applyStockChanges(this.firestore, transaction, stockInputs);
 
       let allReceived = true;
       let anyReceived = false;

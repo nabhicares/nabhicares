@@ -101,6 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           _buildRoleChip('patient', 'Patient', Icons.person_outline),
                           _buildRoleChip('doctor', 'Doctor', Icons.medical_services_outlined),
+                          _buildRoleChip('receptionist', 'Receptionist', Icons.desk_outlined),
                           _buildRoleChip('pharmacist', 'Pharmacist', Icons.medication_liquid_outlined),
                           _buildRoleChip('hospital_admin', 'Admin', Icons.admin_panel_settings_outlined),
                         ],
@@ -200,6 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     _buildBypassButton('Patient', 'patient', AppColors.success),
                     _buildBypassButton('Doctor', 'doctor', AppColors.primary),
+                    _buildBypassButton('Receptionist', 'receptionist', AppColors.warning),
                     _buildBypassButton('Pharmacist', 'pharmacist', AppColors.secondary),
                     _buildBypassButton('Admin', 'hospital_admin', AppColors.textPrimary),
                   ],

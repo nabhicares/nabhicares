@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/providers/settings_provider.dart';
+import '../../../shared_models/appointment.dart';
+import '../../care/data/care_repository.dart';
+import '../appointment_booking/booking_screen.dart';
 import '../appointments/patient_appointments_screen.dart';
+import '../billing/patient_invoices_screen.dart';
 import '../doctor_search/doctor_search_screen.dart';
 import '../notifications/notifications_hub_screen.dart';
+import '../pill_reminders/pill_reminders_screen.dart';
 import '../prescriptions/patient_prescriptions_screen.dart';
 import '../profile/patient_profile_screen.dart';
 
@@ -19,6 +26,7 @@ class PatientHomeScreen extends ConsumerStatefulWidget {
 
 class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   int _currentIndex = 0;
+  DateTime? _lastBackPress;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +48,26 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
       const PatientProfileScreen(),
     ];
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPress != null &&
+            now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+          return;
+        }
+        _lastBackPress = now;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Press back again to exit')),
+        );
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -123,34 +150,44 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
   Widget _buildDashboard(AuthUserState authUser, ThemeData theme, String hospitalName) {
+    final doctorsAsync = ref.watch(doctorsListProvider);
+    final appointmentsAsync = ref.watch(patientAppointmentsPrv);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Search Specialists Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
+          InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DoctorSearchScreen()),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.search, color: AppColors.textMuted),
-                const SizedBox(width: 12),
-                Text(
-                  'Search doctors, symptoms, or department',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textMuted,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.search, color: AppColors.textMuted),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Search doctors, symptoms, or department',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textMuted,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -164,74 +201,28 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          AppCard(
-            backgroundColor: AppColors.primary,
-            hasBorder: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                      child: const Icon(Icons.medical_services, color: Colors.white),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Dr. Gregory House',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            'Diagnostics • Consultation Room 304',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.85),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Divider(color: Colors.white.withOpacity(0.15), height: 1),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today, color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Monday, July 27',
-                          style: TextStyle(color: Colors.white.withOpacity(0.95), fontSize: 13),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time, color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          '10:30 AM',
-                          style: TextStyle(color: Colors.white.withOpacity(0.95), fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+          appointmentsAsync.when(
+            loading: () => const SizedBox(
+              height: 120,
+              child: Center(child: CircularProgressIndicator()),
             ),
+            error: (_, __) => const Text('Could not load upcoming appointment'),
+            data: (appointments) {
+              final upcoming = appointments
+                  .where((a) => a.status == 'booked')
+                  .toList()
+                ..sort((a, b) =>
+                    '${a.date}${a.timeSlot}'.compareTo('${b.date}${b.timeSlot}'));
+              return upcoming.isEmpty
+                  ? AppCard(
+                      onTap: () => setState(() => _currentIndex = 1),
+                      child: const Text('No upcoming appointments. Tap to view bookings.'),
+                    )
+                  : _UpcomingAppointmentCard(
+                      appointment: upcoming.first,
+                      onTap: () => setState(() => _currentIndex = 1),
+                    );
+            },
           ),
           const SizedBox(height: 28),
 
@@ -275,13 +266,19 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 icon: Icons.notifications_active_outlined,
                 label: 'Pill Reminder',
                 color: AppColors.warning,
-                onTap: () {},
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PillRemindersScreen()),
+                ),
               ),
               _buildActionCard(
                 icon: Icons.account_balance_wallet_outlined,
                 label: 'Billing Invoices',
                 color: AppColors.secondary,
-                onTap: () {},
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PatientInvoicesScreen()),
+                ),
               ),
             ],
           ),
@@ -314,13 +311,17 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
           const SizedBox(height: 8),
           SizedBox(
             height: 160,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _buildDoctorCard('Dr. Gregory House', 'Diagnostics', 'MD, FACP', '4.9'),
-                _buildDoctorCard('Dr. Eric Foreman', 'Neurology', 'MD, PhD', '4.8'),
-                _buildDoctorCard('Dr. Allison Cameron', 'Immunology', 'MD', '4.7'),
-              ],
+            child: doctorsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, __) => const Center(child: Text('Could not load doctors')),
+              data: (doctors) => doctors.isEmpty
+                  ? const Center(child: Text('No doctors available'))
+                  : ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        for (final doctor in doctors.take(5)) _buildDoctorCard(doctor),
+                      ],
+                    ),
             ),
           ),
         ],
@@ -369,11 +370,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _buildDoctorCard(String name, String spec, String qual, String rating) {
+  Widget _buildDoctorCard(DoctorProfileModel doctor) {
     return Container(
       width: 220,
       margin: const EdgeInsets.only(right: 16),
       child: AppCard(
+        onTap: () => _bookDoctor(doctor),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -390,12 +392,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        name,
+                        doctor.name,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        spec,
+                        doctor.specialty,
                         style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
@@ -405,7 +407,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              qual,
+              'Consultation ${formatCurrency(doctor.consultationFee)}',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
             ),
             const SizedBox(height: 8),
@@ -414,11 +416,13 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                 const Icon(Icons.star, color: AppColors.warning, size: 14),
                 const SizedBox(width: 4),
                 Text(
-                  rating,
+                  '4.9',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 const Spacer(),
-                const Text(
+                TextButton(
+                  onPressed: () => _bookDoctor(doctor),
+                  child: const Text(
                   'Book Now',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -426,10 +430,90 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     fontSize: 12,
                   ),
                 ),
+                ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _bookDoctor(DoctorProfileModel doctor) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BookingScreen(
+          doctorId: doctor.id,
+          doctorName: doctor.name,
+          specialty: doctor.specialty,
+          fee: doctor.consultationFee,
+        ),
+      ),
+    );
+  }
+}
+
+class _UpcomingAppointmentCard extends StatelessWidget {
+  final Appointment appointment;
+  final VoidCallback onTap;
+
+  const _UpcomingAppointmentCard({
+    required this.appointment,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: onTap,
+      backgroundColor: AppColors.primary,
+      hasBorder: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                child: const Icon(Icons.medical_services, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  appointment.doctorName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(color: Colors.white.withValues(alpha: 0.15), height: 1),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  formatDate(appointment.date),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ),
+              const Icon(Icons.access_time, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                appointment.timeSlot,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

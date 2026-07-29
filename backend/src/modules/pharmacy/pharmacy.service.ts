@@ -10,7 +10,6 @@ export class PharmacyService {
     const { prescriptionId, items } = dto;
 
     return this.firestore.runTransaction(async (transaction) => {
-      // 1. Fetch Prescription
       const prescriptionRef = this.firestore.collection('prescriptions').doc(prescriptionId);
       const prescriptionDoc = await transaction.get(prescriptionRef);
       if (!prescriptionDoc.exists) {
@@ -23,9 +22,29 @@ export class PharmacyService {
       }
 
       const invoiceItems: any[] = [];
+      const rxItems = [...(prescriptionData.items || [])];
 
-      // 2. Verify stock levels and deduct quantities
       for (const item of items) {
+        if (!Number.isFinite(item.quantity) || item.quantity < 1) {
+          throw new BadRequestException('Dispense quantity must be a positive integer.');
+        }
+
+        const rxItemIndex = rxItems.findIndex(
+          (rxItem: any) => rxItem.medicineId === item.medicineId && rxItem.status !== 'dispensed',
+        );
+        if (rxItemIndex === -1) {
+          throw new BadRequestException(
+            `Medicine ${item.medicineId} is not an open line on this prescription.`,
+          );
+        }
+
+        const prescribedQty = Number(rxItems[rxItemIndex].quantity);
+        if (Number.isFinite(prescribedQty) && item.quantity > prescribedQty) {
+          throw new BadRequestException(
+            `Cannot dispense more than prescribed (${prescribedQty}) for medicine ${item.medicineId}.`,
+          );
+        }
+
         const medRef = this.firestore.collection('medicines').doc(item.medicineId);
         const medDoc = await transaction.get(medRef);
         if (!medDoc.exists) {
@@ -39,6 +58,10 @@ export class PharmacyService {
           throw new NotFoundException(`Batch ${item.batchNo} not found for Medicine ${medData.name}.`);
         }
         const batchData = batchDoc.data()!;
+        const unitPrice = Number(batchData.unitPrice);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+          throw new BadRequestException(`Invalid unit price on batch ${item.batchNo}.`);
+        }
 
         if (batchData.quantity < item.quantity) {
           throw new BadRequestException(
@@ -46,17 +69,11 @@ export class PharmacyService {
           );
         }
 
-        // Decrement batch stock
-        const newBatchQty = batchData.quantity - item.quantity;
-        transaction.update(batchRef, { quantity: newBatchQty });
+        transaction.update(batchRef, { quantity: batchData.quantity - item.quantity });
+        transaction.update(medRef, { totalQuantity: medData.totalQuantity - item.quantity });
 
-        // Decrement medicine total
-        const newTotalQty = medData.totalQuantity - item.quantity;
-        transaction.update(medRef, { totalQuantity: newTotalQty });
-
-        // Log Stock Transaction
         const txRef = this.firestore.collection('stockTransactions').doc();
-        const tx = {
+        transaction.set(txRef, {
           id: txRef.id,
           medicineId: item.medicineId,
           medicineName: medData.name,
@@ -65,33 +82,24 @@ export class PharmacyService {
           quantityChange: -item.quantity,
           reason: 'prescription_dispensation',
           createdAt: new Date().toISOString(),
-        };
-        transaction.set(txRef, tx);
+        });
 
-        // Update Prescription line item status
-        const rxItemIndex = prescriptionData.items.findIndex(
-          (rxItem: any) => rxItem.medicineId === item.medicineId,
-        );
-        if (rxItemIndex !== -1) {
-          prescriptionData.items[rxItemIndex].status = 'dispensed';
-        }
+        rxItems[rxItemIndex] = { ...rxItems[rxItemIndex], status: 'dispensed' };
 
-        // Append to invoice items
+        // Price from batch — never from client body.
         invoiceItems.push({
           description: `Medicine: ${medData.name} (Batch: ${item.batchNo}) x${item.quantity}`,
-          amount: item.quantity * batchData.unitPrice,
+          amount: item.quantity * unitPrice,
         });
       }
 
-      // 3. Update global prescription status
-      const allDispensed = prescriptionData.items.every((rxItem: any) => rxItem.status === 'dispensed');
+      const allDispensed = rxItems.every((rxItem: any) => rxItem.status === 'dispensed');
       const nextRxStatus = allDispensed ? 'dispensed' : 'partial';
       transaction.update(prescriptionRef, {
-        items: prescriptionData.items,
+        items: rxItems,
         status: nextRxStatus,
       });
 
-      // 4. Generate Billing Invoice
       const invoiceRef = this.firestore.collection('invoices').doc();
       const totalAmount = invoiceItems.reduce((sum, line) => sum + line.amount, 0);
       const invoice = {
@@ -126,11 +134,12 @@ export class PharmacyService {
 
     for (const rx of prescriptions) {
       for (const item of rx.items) {
-        const batchesSnapshot = await this.firestore.collection('medicines')
+        const batchesSnapshot = await this.firestore
+          .collection('medicines')
           .doc(item.medicineId)
           .collection('batches')
           .get();
-        
+
         const batches = batchesSnapshot.docs.map((d) => d.data());
         const activeBatches = batches.filter((b: any) => b.quantity > 0 && b.expiryDate);
         activeBatches.sort((a: any, b: any) => a.expiryDate.localeCompare(b.expiryDate));

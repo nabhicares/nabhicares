@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -192,10 +193,25 @@ class _DoctorSearchScreenState extends ConsumerState<DoctorSearchScreen> {
     );
   }
 
+  void _openBooking(DoctorProfileModel doc) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BookingScreen(
+          doctorId: doc.id,
+          doctorName: doc.name,
+          specialty: doc.specialty,
+          fee: doc.consultationFee,
+        ),
+      ),
+    );
+  }
+
   Widget _buildDoctorListItem(DoctorProfileModel doc, BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: AppCard(
+        onTap: () => _openBooking(doc),
         child: Column(
           children: [
             Row(
@@ -241,7 +257,7 @@ class _DoctorSearchScreenState extends ConsumerState<DoctorSearchScreen> {
                           Icon(Icons.monetization_on_outlined, color: Colors.grey.shade600, size: 16),
                           const SizedBox(width: 4),
                           Text(
-                            '\$${doc.consultationFee.toStringAsFixed(0)}',
+                            formatCurrency(doc.consultationFee),
                             style: TextStyle(
                               color: Colors.grey.shade700,
                               fontWeight: FontWeight.w600,
@@ -269,19 +285,7 @@ class _DoctorSearchScreenState extends ConsumerState<DoctorSearchScreen> {
                   label: 'Book Consultation',
                   width: 150,
                   height: 38,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => BookingScreen(
-                          doctorId: doc.id,
-                          doctorName: doc.name,
-                          specialty: doc.specialty,
-                          fee: doc.consultationFee,
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: () => _openBooking(doc),
                 ),
               ],
             ),

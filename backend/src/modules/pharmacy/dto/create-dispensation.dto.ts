@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsArray, IsNumber, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsString, IsArray, IsNumber, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -16,6 +16,7 @@ export class DispenseItemDto {
   @ApiProperty({ example: 10 })
   @IsNotEmpty()
   @IsNumber()
+  @Min(1)
   quantity: number;
 }
 

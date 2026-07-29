@@ -28,6 +28,7 @@ class PatientProfileScreen extends ConsumerWidget {
           status: 'active',
           uid: 'session',
           onSignOut: () => ref.read(authStatePrv.notifier).logout(),
+          onDeleteAccount: () => _confirmDelete(context, ref),
         );
       },
       data: (profile) => _ProfileBody(
@@ -38,8 +39,47 @@ class PatientProfileScreen extends ConsumerWidget {
         status: profile.status,
         uid: profile.uid,
         onSignOut: () => ref.read(authStatePrv.notifier).logout(),
+        onDeleteAccount: () => _confirmDelete(context, ref),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This permanently anonymizes your name, email, phone, clinical history, '
+          'and notifications. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.critical),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(careRepositoryPrv).deleteMyAccount();
+      ref.read(authStatePrv.notifier).logout();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account deleted. Personal data anonymized.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete account: $e')),
+        );
+      }
+    }
   }
 }
 
@@ -51,6 +91,7 @@ class _ProfileBody extends StatelessWidget {
   final String status;
   final String uid;
   final VoidCallback onSignOut;
+  final VoidCallback onDeleteAccount;
 
   const _ProfileBody({
     required this.name,
@@ -60,6 +101,7 @@ class _ProfileBody extends StatelessWidget {
     required this.status,
     required this.uid,
     required this.onSignOut,
+    required this.onDeleteAccount,
   });
 
   @override
@@ -102,7 +144,8 @@ class _ProfileBody extends StatelessWidget {
         const SizedBox(height: 12),
         const FormHintBox(
           message:
-              'Account details are managed by hospital administration. Password and avatar updates are not available in this build.',
+              'You can delete your account below. Passwords are never stored in this app — '
+              'they are handled only by Firebase Auth when real login is enabled.',
         ),
         const SizedBox(height: 20),
         OutlinedButton.icon(
@@ -112,6 +155,16 @@ class _ProfileBody extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.critical,
             side: const BorderSide(color: AppColors.critical),
+            minimumSize: const Size(double.infinity, 48),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: onDeleteAccount,
+          icon: const Icon(Icons.delete_forever_rounded, size: 18),
+          label: const Text('Delete my account'),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.critical,
             minimumSize: const Size(double.infinity, 48),
           ),
         ),

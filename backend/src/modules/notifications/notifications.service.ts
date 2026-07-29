@@ -37,11 +37,14 @@ export class NotificationsService {
           });
           notification.status = 'sent';
         } else {
-          console.warn(`[NotificationsService] No registered FCM token found for user: ${dto.userId}`);
+          console.warn('[NotificationsService] No registered FCM token found for user: [REDACTED]');
           notification.status = 'no_token_registered';
         }
-      } catch (err) {
-        console.error('[NotificationsService] Firebase Cloud Messaging dispatch error:', err.message);
+      } catch (err: any) {
+        console.error(
+          '[NotificationsService] Firebase Cloud Messaging dispatch error:',
+          err?.message ? '[REDACTED]' : 'unknown',
+        );
         notification.status = 'fcm_failed';
       }
     } else {
