@@ -6,7 +6,35 @@ PharmaStore CareFlow is a production-grade healthcare EMR and pharmacy managemen
 
 The project consists of:
 1. **Backend**: NestJS application with a global shared Firestore instance (fully singleton resolved).
-2. **Mobile Client**: Flutter application featuring patient, doctor, and pharmacist portals.
+2. **Mobile Client**: Flutter application featuring patient, doctor, pharmacist, and receptionist portals.
+3. **Web Client**: Next.js 16 App Router application targeting the same CareFlow API — role-based portals for all six roles.
+
+---
+
+## 3. Web Client Setup & Run
+
+```bash
+cd web
+npm install
+npm run dev          # http://localhost:3001
+npm run build        # production build
+```
+
+Set `NEXT_PUBLIC_API_URL` in `web/.env.local` (default: `http://localhost:3000/api/v1`).
+
+### Portals
+
+| Role | Entry URL |
+|------|-----------|
+| Patient | `/portal/patient/home` |
+| Doctor | `/portal/doctor/dashboard` |
+| Receptionist | `/portal/reception/patients` |
+| Pharmacist | `/portal/pharmacy/dispense` |
+| Hospital Admin / Super Admin | `/portal/admin/overview` |
+
+All portals are demo-mode — select a role on the `/login` screen, no credentials needed.
+
+---
 
 ---
 
