@@ -67,12 +67,23 @@ async def get_current_user(
             raise HTTPException(401, "Unknown mock role")
         hospital_id = None
         if role != "super_admin":
-            if not x_hospital_id:
-                raise HTTPException(400, "X-Hospital-ID is required in mock mode")
-            try:
-                hospital_id = uuid.UUID(x_hospital_id)
-            except ValueError as exc:
-                raise HTTPException(400, "X-Hospital-ID must be a UUID") from exc
+            if x_hospital_id:
+                try:
+                    hospital_id = uuid.UUID(x_hospital_id)
+                except ValueError as exc:
+                    raise HTTPException(400, "X-Hospital-ID must be a UUID") from exc
+            else:
+                # Demo clients (web/mobile) often omit the header — fall back to the seeded DEMO hospital.
+                from .models import Hospital
+
+                hospital_id = await session.scalar(
+                    select(Hospital.id).where(Hospital.code == "DEMO", Hospital.deleted_at.is_(None))
+                )
+                if hospital_id is None:
+                    raise HTTPException(
+                        400,
+                        "X-Hospital-ID is required (or seed the DEMO hospital first)",
+                    )
         return CurrentUser(None, raw, role, hospital_id, None)
 
     try:

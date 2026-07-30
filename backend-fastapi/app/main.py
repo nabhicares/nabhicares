@@ -9,7 +9,7 @@ from starlette.responses import JSONResponse
 
 from .config import get_settings
 from .db import engine
-from .routers import billing, clinical, inventory, platform, purchases, sales
+from .routers import billing, clinical, inventory, platform, purchases, reports, sales
 
 settings = get_settings()
 
@@ -70,6 +70,7 @@ for api_router in (
     purchases.router,
     sales.router,
     billing.router,
+    reports.router,
 ):
     app.include_router(api_router, prefix="/api/v1")
 
