@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -130,6 +129,9 @@ server.use('/api/v1/users/bootstrap', authBurstLimiter);
 server.use('/api/v1/notifications/push', messagingLimiter);
 
 async function bootstrapNest() {
+  // Imported lazily so a failure anywhere in the Nest dependency graph is thrown
+  // inside the handler's try/catch rather than aborting module load.
+  const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     logger: isProductionRuntime() ? ['error', 'warn'] : ['log', 'error', 'warn', 'debug'],
   });
@@ -185,32 +187,44 @@ async function bootstrapNest() {
   isInitialized = true;
 }
 
-const handler = async (req: any, res: any) => {
-  if (startupError) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-store');
-    res.end(
-      JSON.stringify(
-        {
-          success: false,
-          error: {
-            code: 'STARTUP_CONFIG_INVALID',
-            message: 'API failed to start. This is a deployment configuration problem.',
-            detail: startupError.message.split('\n'),
-          },
-        },
-        null,
-        2,
-      ),
-    );
+function sendStartupFailure(res: any, err: Error): void {
+  // Full stack to the platform log; only the message goes over the wire.
+  console.error('Startup failure:', err.stack ?? err.message);
+  if (res.headersSent) {
     return;
   }
-  if (!isInitialized) {
-    await bootstrapNest();
+  res.statusCode = 500;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(
+    JSON.stringify(
+      {
+        success: false,
+        error: {
+          code: 'STARTUP_FAILED',
+          message: 'API failed to start. This is a deployment configuration problem.',
+          detail: err.message.split('\n'),
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+const handler = async (req: any, res: any) => {
+  try {
+    if (startupError) {
+      throw startupError;
+    }
+    if (!isInitialized) {
+      await bootstrapNest();
+    }
+    server(req, res);
+  } catch (err) {
+    sendStartupFailure(res, err instanceof Error ? err : new Error(String(err)));
   }
-  server(req, res);
 };
 
 // Local listener only outside production / Vercel.
