@@ -42,11 +42,6 @@ export function assertCriticalEnv(): void {
     if (!clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
     if (!privateKey) missing.push('FIREBASE_PRIVATE_KEY');
     if (!bootstrapSecret) missing.push('BOOTSTRAP_SECRET');
-    if (!corsOrigins) {
-      missing.push(
-        'CORS_ORIGINS (comma-separated frontend origins, or "none" for mobile-only APIs)',
-      );
-    }
 
     if (privateKey?.includes('MOCK_KEY') || privateKey?.includes('YOUR_PRIVATE_KEY')) {
       fatal.push('FIREBASE_PRIVATE_KEY looks like a placeholder / mock key');

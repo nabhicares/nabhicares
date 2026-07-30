@@ -18,12 +18,15 @@ import {
 
 dotenv.config();
 
+// Throwing here would abort module load, and the platform can then only report a
+// generic FUNCTION_INVOCATION_FAILED with no cause. Holding the error and serving it
+// from the handler keeps the misconfiguration visible to whoever hits the URL.
+let startupError: Error | null = null;
 try {
   assertCriticalEnv();
 } catch (err) {
-  // Fail loudly at cold start so Vercel logs show the config problem.
-  console.error(err instanceof Error ? err.message : err);
-  throw err;
+  startupError = err instanceof Error ? err : new Error(String(err));
+  console.error(startupError.message);
 }
 
 const server = express();
@@ -183,6 +186,27 @@ async function bootstrapNest() {
 }
 
 const handler = async (req: any, res: any) => {
+  if (startupError) {
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(
+      JSON.stringify(
+        {
+          success: false,
+          error: {
+            code: 'STARTUP_CONFIG_INVALID',
+            message: 'API failed to start. This is a deployment configuration problem.',
+            detail: startupError.message.split('\n'),
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
   if (!isInitialized) {
     await bootstrapNest();
   }
@@ -190,7 +214,7 @@ const handler = async (req: any, res: any) => {
 };
 
 // Local listener only outside production / Vercel.
-if (!isProductionRuntime() && !process.env.VERCEL) {
+if (!startupError && !isProductionRuntime() && !process.env.VERCEL) {
   const port = process.env.PORT || 3000;
   bootstrapNest()
     .then(() => {
