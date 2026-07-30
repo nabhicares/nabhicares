@@ -9,6 +9,6 @@
 class AppConfig {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://pharma-store-api.vercel.app/api/v1',
+    defaultValue: 'https://nabhicares.vercel.app/api/v1',
   );
 }
