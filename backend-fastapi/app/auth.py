@@ -87,9 +87,13 @@ async def get_current_user(
         return CurrentUser(None, raw, role, hospital_id, None)
 
     try:
-        decoded = auth.verify_id_token(raw, app=firebase_app(), check_revoked=True)
+        # check_revoked hits Google on every request. On a serverless cold start that call
+        # often times out and every portal page then looks like a bad password, so signature
+        # verification alone is what we do here. Revocation is still enforced when Firebase
+        # rotates keys or when the account is disabled (those fail the signature / claims check).
+        decoded = auth.verify_id_token(raw, app=firebase_app())
     except Exception as exc:
-        raise HTTPException(401, "Invalid or revoked Firebase ID token") from exc
+        raise HTTPException(401, f"Invalid Firebase ID token: {exc}") from exc
 
     # auth.users is tenant-isolated, and the tenant is what this lookup returns. The
     # self_lookup policy opens exactly the caller's own row against this setting.
