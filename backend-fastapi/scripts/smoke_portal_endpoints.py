@@ -1,4 +1,8 @@
-"""Smoke-check the two endpoints the web portal needs for the FastAPI cutover."""
+"""Smoke-check the deployed entrypoint and the endpoints the web portal needs.
+
+Imports through api/index.py — the module named in [tool.vercel] entrypoint — so this
+exercises the same object the deployment loads, not just app.main.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,10 @@ import asyncio
 import os
 from pathlib import Path
 
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+WEB_ORIGIN = "https://cares.nabhilabs.com"
 
 
 def load_env() -> None:
@@ -19,7 +26,9 @@ def load_env() -> None:
         key, _, value = line.partition("=")
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
     os.environ["ALLOW_MOCK_AUTH"] = "true"
-    # Settings are cached — clear so ALLOW_MOCK_AUTH takes effect.
+    # Assert CORS against the real browser origin rather than whatever .env allows locally.
+    os.environ["CORS_ORIGINS"] = f"{WEB_ORIGIN},http://localhost:3001"
+    # Settings are cached — clear so the overrides above take effect.
     from app.config import get_settings
 
     get_settings.cache_clear()
@@ -27,7 +36,12 @@ def load_env() -> None:
 
 async def main() -> None:
     load_env()
-    from app.main import app
+    from api.index import app
+
+    if not isinstance(app, FastAPI):
+        raise SystemExit(
+            "entrypoint fell back to the startup diagnostic — app.main failed to import"
+        )
 
     transport = ASGITransport(app=app)
     headers = {
@@ -37,18 +51,22 @@ async def main() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         preflight = await client.options(
             "/api/v1/prescriptions",
-            headers={
-                "Origin": "https://cares.nabhilabs.com",
-                "Access-Control-Request-Method": "GET",
-            },
+            headers={"Origin": WEB_ORIGIN, "Access-Control-Request-Method": "GET"},
         )
-        print("OPTIONS prescriptions", preflight.status_code, preflight.headers.get("access-control-allow-origin"))
+        acao = preflight.headers.get("access-control-allow-origin")
+        print("OPTIONS prescriptions", preflight.status_code, acao)
+        assert preflight.status_code == 200, preflight.text
+        assert acao == WEB_ORIGIN, f"expected {WEB_ORIGIN}, got {acao}"
 
         rx = await client.get("/api/v1/prescriptions?limit=10", headers=headers)
         print("GET prescriptions", rx.status_code, rx.text[:200])
 
         dash = await client.get("/api/v1/reports/dashboard", headers=headers)
         print("GET reports/dashboard", dash.status_code, dash.text[:300])
+
+        live = await client.get("/health/live")
+        print("GET health/live", live.status_code, live.text[:80])
+        assert live.status_code == 200, live.text
 
         assert rx.status_code == 200, rx.text
         assert dash.status_code == 200, dash.text

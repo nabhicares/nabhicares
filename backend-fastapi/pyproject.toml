@@ -22,6 +22,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["httpx", "pytest", "pytest-asyncio", "ruff"]
 
+[tool.vercel]
+# Both app/main.py and api/index.py expose a top-level `app`, so autodetection has two
+# candidates and fails. Name the wrapper explicitly: it re-exports the real app but
+# degrades to a readable JSON diagnosis when startup raises.
+entrypoint = "api.index:app"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
