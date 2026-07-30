@@ -75,6 +75,18 @@ for api_router in (
     app.include_router(api_router, prefix="/api/v1")
 
 
+@app.get("/")
+@app.get("/api/v1")
+async def index():
+    # Nothing is mounted on the bare prefix, and a plain 404 there reads like an outage.
+    return {
+        "service": app.title,
+        "version": app.version,
+        "health": "/health/live",
+        "schema": app.openapi_url,
+    }
+
+
 @app.get("/health/live")
 async def liveness():
     return {"status": "ok"}
