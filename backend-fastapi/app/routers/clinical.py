@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import CurrentUser, get_current_user, require_hospital, require_roles, scope_session
 from ..db import get_session
+from ..lookup import doctor_uuid, patient_uuid
 from ..models import (
     Appointment,
     AppointmentStatusLog,
@@ -86,7 +87,8 @@ async def list_doctors(
         await session.scalars(stmt.order_by(Doctor.name).offset((page - 1) * limit).limit(limit))
     ).all()
     return {
-        "items": [serialize(row) for row in rows],
+        # Clients label the field "specialty"; the column keeps the clinical spelling.
+        "items": [serialize(row) | {"specialty": row.specialization} for row in rows],
         "meta": {"page": page, "limit": limit, "total": total},
     }
 
@@ -114,8 +116,8 @@ async def create_doctor(
 async def list_appointments(
     session: Session,
     user: User,
-    patient_id: uuid.UUID | None = None,
-    doctor_id: uuid.UUID | None = None,
+    patient_id: str | None = Query(None, alias="patientId"),
+    doctor_id: str | None = Query(None, alias="doctorId"),
     status: str | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
@@ -126,9 +128,13 @@ async def list_appointments(
         Appointment.hospital_id == hospital_id, Appointment.deleted_at.is_(None)
     )
     if patient_id:
-        stmt = stmt.where(Appointment.patient_id == patient_id)
+        stmt = stmt.where(
+            Appointment.patient_id == await patient_uuid(session, hospital_id, patient_id)
+        )
     if doctor_id:
-        stmt = stmt.where(Appointment.doctor_id == doctor_id)
+        stmt = stmt.where(
+            Appointment.doctor_id == await doctor_uuid(session, hospital_id, doctor_id)
+        )
     if status:
         stmt = stmt.where(Appointment.status == status)
     rows = (
@@ -136,7 +142,36 @@ async def list_appointments(
             stmt.order_by(Appointment.starts_at.desc()).offset((page - 1) * limit).limit(limit)
         )
     ).all()
-    return [serialize(row) for row in rows]
+
+    names = await _participant_names(session, rows)
+    return [serialize(row) | _appointment_view(row, names) for row in rows]
+
+
+async def _participant_names(
+    session: AsyncSession, rows: list[Appointment]
+) -> dict[uuid.UUID, str]:
+    if not rows:
+        return {}
+    names: dict[uuid.UUID, str] = {}
+    for model, ids in (
+        (Patient, {row.patient_id for row in rows}),
+        (Doctor, {row.doctor_id for row in rows}),
+    ):
+        for found_id, name in await session.execute(
+            select(model.id, model.name).where(model.id.in_(ids))
+        ):
+            names[found_id] = name
+    return names
+
+
+def _appointment_view(row: Appointment, names: dict[uuid.UUID, str]) -> dict:
+    # Clients render a calendar day and a slot label rather than a timestamp.
+    return {
+        "patientName": names.get(row.patient_id),
+        "doctorName": names.get(row.doctor_id),
+        "date": row.starts_at.date().isoformat(),
+        "timeSlot": row.starts_at.strftime("%H:%M"),
+    }
 
 
 @router.post("/appointments", status_code=201)

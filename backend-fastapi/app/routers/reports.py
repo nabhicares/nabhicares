@@ -7,12 +7,13 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import CurrentUser, require_hospital, require_roles, scope_session
 from ..db import get_session
+from ..lookup import patient_uuid
 from ..models import Appointment, Doctor, Invoice, Patient, Prescription, PrescriptionItem
 
 router = APIRouter()
@@ -51,23 +52,6 @@ def _rx_row(
     }
 
 
-async def _patient_uuid(session: AsyncSession, hospital_id: uuid.UUID, raw: str) -> uuid.UUID:
-    try:
-        return uuid.UUID(raw)
-    except ValueError:
-        pass
-    patient = await session.scalar(
-        select(Patient).where(
-            Patient.hospital_id == hospital_id,
-            Patient.medical_record_number == raw,
-            Patient.deleted_at.is_(None),
-        )
-    )
-    if not patient:
-        raise HTTPException(404, f"Patient '{raw}' not found")
-    return patient.id
-
-
 @router.get("/prescriptions")
 async def list_prescriptions(
     session: Session,
@@ -95,7 +79,7 @@ async def list_prescriptions(
     stmt = select(Prescription).where(Prescription.hospital_id == hospital_id)
     if patient_id:
         stmt = stmt.where(
-            Prescription.patient_id == await _patient_uuid(session, hospital_id, patient_id)
+            Prescription.patient_id == await patient_uuid(session, hospital_id, patient_id)
         )
     if status:
         stmt = stmt.where(Prescription.status == status)

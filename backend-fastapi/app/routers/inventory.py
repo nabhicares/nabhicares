@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import CurrentUser, get_current_user, require_hospital, require_roles, scope_session
 from ..db import get_session
-from ..models import Medicine, MedicineBatch, Stock, StockTransaction
+from ..models import Medicine, MedicineBatch, MedicineCategory, Stock, StockTransaction
 from ..responses import serialize
 from ..schemas import MedicineCreate, StockAdd
 
@@ -35,18 +35,29 @@ async def list_medicines(
         select(
             Medicine,
             func.coalesce(func.sum(Stock.available_quantity), 0).label("total_quantity"),
+            func.max(MedicineBatch.selling_price).label("mrp"),
+            MedicineCategory.name.label("category"),
         )
         .outerjoin(MedicineBatch, MedicineBatch.medicine_id == Medicine.id)
         .outerjoin(Stock, Stock.medicine_batch_id == MedicineBatch.id)
+        .outerjoin(MedicineCategory, MedicineCategory.id == Medicine.category_id)
         .where(Medicine.hospital_id == hospital_id, Medicine.deleted_at.is_(None))
-        .group_by(Medicine.id)
+        .group_by(Medicine.id, MedicineCategory.name)
     )
     if q:
         stmt = stmt.where(Medicine.name.ilike(f"%{q}%"))
     rows = (
         await session.execute(stmt.order_by(Medicine.name).offset((page - 1) * limit).limit(limit))
     ).all()
-    return [{**serialize(row.Medicine), "totalQuantity": row.total_quantity} for row in rows]
+    return [
+        {
+            **serialize(row.Medicine),
+            "totalQuantity": row.total_quantity,
+            "category": row.category,
+            "mrp": float(row.mrp) if row.mrp is not None else None,
+        }
+        for row in rows
+    ]
 
 
 @router.post("/inventory/medicines", status_code=201)

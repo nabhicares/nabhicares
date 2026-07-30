@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import CurrentUser, require_hospital, require_roles, scope_session
 from ..db import get_session
+from ..lookup import patient_uuid
 from ..models import (
     Customer,
     Hospital,
@@ -27,6 +28,17 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 BillingStaff = Annotated[
     CurrentUser,
     Depends(require_roles("super_admin", "hospital_admin", "pharmacist", "receptionist")),
+]
+# A patient reads their own bills from the portal. This still returns any patient's
+# invoices to a patient-role caller; narrowing it to the caller's own record needs the
+# user identity that only real Firebase auth carries.
+InvoiceReader = Annotated[
+    CurrentUser,
+    Depends(
+        require_roles(
+            "super_admin", "hospital_admin", "pharmacist", "receptionist", "patient"
+        )
+    ),
 ]
 
 
@@ -95,7 +107,7 @@ async def create_sale_invoice(sale_id: uuid.UUID, session: Session, user: Billin
 
 
 @router.get("/billing/invoices/patient/{patient_id}")
-async def patient_invoices(patient_id: uuid.UUID, session: Session, user: BillingStaff):
+async def patient_invoices(patient_id: str, session: Session, user: InvoiceReader):
     hospital_id = require_hospital(user)
     await scope_session(session, user)
     rows = (
@@ -103,7 +115,7 @@ async def patient_invoices(patient_id: uuid.UUID, session: Session, user: Billin
             select(Invoice)
             .where(
                 Invoice.hospital_id == hospital_id,
-                Invoice.patient_id == patient_id,
+                Invoice.patient_id == await patient_uuid(session, hospital_id, patient_id),
             )
             .order_by(Invoice.created_at.desc())
         )

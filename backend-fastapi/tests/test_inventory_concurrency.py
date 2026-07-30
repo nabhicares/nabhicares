@@ -71,7 +71,7 @@ async def test_concurrent_sales_cannot_oversell():
                 },
             )
             assert stock.status_code == 201, stock.text
-            batch_id = stock.json()["data"]["medicine_batch_id"]
+            batch_id = stock.json()["data"]["medicineBatchId"]
 
             customer = await client.post(
                 "/api/v1/customers",
