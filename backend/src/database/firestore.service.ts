@@ -142,8 +142,6 @@ export class FirestoreService implements OnModuleInit {
     const production = isProductionRuntime();
     const demo = isDemoMode();
     const fs = require('fs');
-    const path = require('path');
-    const saPath = path.join(process.cwd(), 'firebase-service-account.json');
 
     const normalizePrivateKey = (raw: string) =>
       raw
@@ -166,10 +164,11 @@ export class FirestoreService implements OnModuleInit {
       }
     };
 
+    // Literal filenames only — local-dev convenience; production always uses env credentials.
     let saCreds: any = null;
-    if (!production && fs.existsSync(saPath)) {
+    if (!production && fs.existsSync('firebase-service-account.json')) {
       try {
-        saCreds = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+        saCreds = JSON.parse(fs.readFileSync('firebase-service-account.json', 'utf8'));
       } catch {
         console.warn('[FirestoreService] Failed to parse firebase-service-account.json');
       }

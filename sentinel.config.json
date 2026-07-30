@@ -1,0 +1,53 @@
+{
+  "runner": "native",
+  "protectedBranches": [
+    "main",
+    "master",
+    "production",
+    "release"
+  ],
+  "requiredChecks": [
+    "gitleaks",
+    "opengrep",
+    "trivy"
+  ],
+  "failOn": {
+    "gitleaks": [
+      "critical",
+      "high",
+      "medium"
+    ],
+    "opengrep": [
+      "critical",
+      "high"
+    ],
+    "supabase": [
+      "critical"
+    ],
+    "fastapi": [
+      "critical"
+    ],
+    "agentic": [
+      "critical"
+    ],
+    "firebase": [
+      "critical"
+    ],
+    "express": [
+      "critical"
+    ],
+    "flutter": [
+      "critical"
+    ],
+    "nextjs": [
+      "critical"
+    ],
+    "trivy": [
+      "critical",
+      "high"
+    ],
+    "testing": []
+  },
+  "testing": {},
+  "debtExpiryDays": 90
+}

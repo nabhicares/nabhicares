@@ -54,10 +54,15 @@ alembic upgrade head
 ### Run
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+python run_dev.py
 # Docs: http://localhost:8000/docs
 # Health: http://localhost:8000/health/ready
 ```
+
+On Windows, use `run_dev.py` rather than the `uvicorn` CLI. The CLI builds a
+ProactorEventLoop before importing the app, and psycopg's async mode cannot run on
+it, so every database request fails with `psycopg.InterfaceError`. On Linux and
+Vercel either command works.
 
 First super-admin:
 

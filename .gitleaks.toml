@@ -1,0 +1,16 @@
+[extend]
+useDefault = true
+
+# Vendored dependencies ship their own test keys and PEM fixtures.
+# Scanning them reports third-party sample data, not our secrets.
+[[allowlists]]
+description = "Vendored dependency and build directories"
+paths = [
+  '''(^|/)\.venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.dart_tool/''',
+  '''(^|/)build/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.next/''',
+  '''\.pyc$''',
+]

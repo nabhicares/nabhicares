@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "accepted": [
+    {
+      "fingerprint": "27506af69ce24ae5ed36c05fa120ab45eaaa5da4660e121bdf78fe609d6b4dc6",
+      "rule": "private-key",
+      "file": "backend-fastapi/.env",
+      "reason": "Local-only dev file backend-fastapi/.env (Firebase Admin private key). Gitignored via .gitignore:7, verified never committed to git history. Real credentials live in Vercel env vars, not the repo.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "a1741558cceb3b8508c5539c7bf568a923ba5ef8d5fb3660b91765ea9da8d29e",
+      "rule": "generic-api-key",
+      "file": "backend-fastapi/.env",
+      "reason": "Local-only dev file backend-fastapi/.env (Aiven Postgres / Cloudinary credential). Gitignored via .gitignore:7, verified never committed.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "3d468a0ef5653258c0201cf5a80bc2787169d5b56986b029b0fdb66639d7c55b",
+      "rule": "private-key",
+      "file": "backend-fastapi/.env.vercel",
+      "reason": "Local-only deploy scratch file backend-fastapi/.env.vercel (Firebase Admin private key). Gitignored via .gitignore:8, verified never committed.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "0b54cf2e021c1f1b3dd3d75b7b7fdbeafcc085291d38796578e5372a418da6ca",
+      "rule": "generic-api-key",
+      "file": "backend-fastapi/.env.vercel",
+      "reason": "Local-only deploy scratch file backend-fastapi/.env.vercel (Aiven Postgres / Cloudinary credential). Gitignored via .gitignore:8, verified never committed.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "389ab044448ea624141648166eb1d3de64b3ef043e09f82b4da1a2b324c8efb1",
+      "rule": "private-key",
+      "file": "backend/.env",
+      "reason": "Local-only dev file backend/.env for legacy NestJS service (Firebase service-account private key). Gitignored via backend/.gitignore:2, verified never committed.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "b8730dd46ba94b9060e3cb4806f172ccc82f9bfefa7fffd647cd49c71053db6a",
+      "rule": "gcp-api-key",
+      "file": "web/.env.local",
+      "reason": "Local-only dev file web/.env.local (Firebase web API key). Gitignored via web/.gitignore:34, verified never committed. Firebase web keys are public by design; protection is Security Rules plus API key restrictions.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "7c9b9854401df172f1f9467c06b9ff9a97ca6f3262ad697dc8b6ae0f4cd301a6",
+      "rule": "gcp-api-key",
+      "file": "web/.env.example",
+      "reason": "Firebase web API key committed to web/.env.example in commit 42b3c30; working tree now uses placeholders. Firebase web API keys are public by design and ship in client bundles, so history rewrite gains nothing. Mitigation: HTTP referrer + API restrictions on the key in Google Cloud Console, enforced by Firebase Security Rules. Revisit if this key is ever granted non-Firebase GCP scopes.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-29",
+      "expiresAt": "2026-10-27"
+    }
+  ]
+}

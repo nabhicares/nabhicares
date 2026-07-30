@@ -3,7 +3,9 @@
  * Bearer token = "mock-{role}" (demo mode) or real Firebase ID token.
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://pharma-store-api.vercel.app/api/v1";
+// A trailing slash here would produce "//path", which Vercel answers with a 308.
+// Browsers refuse redirects on CORS preflight, so the request fails before it is sent.
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1").replace(/\/+$/, "");
 
 export type Role = "patient" | "doctor" | "receptionist" | "pharmacist" | "hospital_admin" | "super_admin";
 
