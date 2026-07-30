@@ -277,13 +277,11 @@ async def change_appointment_status(
     hospital_id = require_hospital(user)
     await scope_session(session, user)
     appointment = await session.scalar(
-        select(Appointment)
-        .where(
+        select(Appointment).where(
             Appointment.id == appointment_id,
             Appointment.hospital_id == hospital_id,
             Appointment.deleted_at.is_(None),
         )
-        .with_for_update()
     )
     if not appointment:
         raise HTTPException(404, "Appointment not found")
@@ -327,5 +325,8 @@ async def change_appointment_status(
             note=body.note,
         )
     )
+    # Snapshot before commit — Vercel + FOR UPDATE left the connection wedged so the
+    # response middleware returned a bare 500 even though the row had already updated.
+    payload = serialize(appointment)
     await session.commit()
-    return serialize(appointment)
+    return payload
