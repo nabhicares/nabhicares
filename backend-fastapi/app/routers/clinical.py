@@ -178,12 +178,12 @@ def _appointment_view(row: Appointment, names: dict[uuid.UUID, str]) -> dict:
 def _starts_from_body(body: AppointmentCreate) -> tuple[datetime, datetime | None]:
     if body.starts_at is not None:
         return body.starts_at, body.ends_at
-    assert body.date is not None and body.time_slot
+    assert body.visit_date is not None and body.time_slot
     try:
         hour, minute = (int(part) for part in body.time_slot.split(":", 1))
     except ValueError as exc:
         raise HTTPException(400, "timeSlot must be HH:MM") from exc
-    starts = datetime.combine(body.date, time(hour, minute), tzinfo=UTC)
+    starts = datetime.combine(body.visit_date, time(hour, minute), tzinfo=UTC)
     return starts, starts + timedelta(minutes=30)
 
 

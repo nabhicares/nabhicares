@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date as Date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -12,7 +12,7 @@ class ORMModel(BaseModel):
 class PatientCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     medical_record_number: str = Field(min_length=1, max_length=60)
-    date_of_birth: date | None = None
+    date_of_birth: Date | None = None
     gender: str | None = Field(default=None, max_length=30)
     phone: str | None = Field(default=None, max_length=30)
     email: str | None = Field(default=None, max_length=255)
@@ -41,14 +41,16 @@ class AppointmentCreate(BaseModel):
     starts_at: datetime | None = Field(default=None, alias="startsAt")
     ends_at: datetime | None = Field(default=None, alias="endsAt")
     reason: str | None = None
-    date: date | None = None
+    # Must not be named `date` — that shadows the datetime.date type in the class namespace
+    # and crashes import under Pydantic's annotation resolution (seen on Vercel).
+    visit_date: Date | None = Field(default=None, alias="date")
     time_slot: str | None = Field(default=None, alias="timeSlot")
 
     @model_validator(mode="after")
     def require_identity_and_time(self):
         if not self.patient_id or not self.doctor_id:
             raise ValueError("patientId and doctorId are required")
-        if self.starts_at is None and (self.date is None or not self.time_slot):
+        if self.starts_at is None and (self.visit_date is None or not self.time_slot):
             raise ValueError("Provide startsAt, or date and timeSlot")
         if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
             raise ValueError("ends_at must be after starts_at")
@@ -75,8 +77,8 @@ class StockAdd(BaseModel):
     medicine_id: uuid.UUID
     batch_number: str = Field(min_length=1, max_length=100)
     quantity: int = Field(gt=0)
-    expiry_date: date
-    manufacturing_date: date | None = None
+    expiry_date: Date
+    manufacturing_date: Date | None = None
     purchase_price: Decimal = Field(ge=0)
     selling_price: Decimal = Field(ge=0)
     supplier_id: uuid.UUID | None = None
@@ -123,7 +125,7 @@ class PurchaseItemCreate(BaseModel):
 class PurchaseCreate(BaseModel):
     supplier_id: uuid.UUID
     items: list[PurchaseItemCreate] = Field(min_length=1)
-    expected_at: date | None = None
+    expected_at: Date | None = None
     notes: str | None = None
 
 
@@ -131,8 +133,8 @@ class ReceiveItem(BaseModel):
     purchase_item_id: uuid.UUID
     batch_number: str
     quantity_received: int = Field(gt=0)
-    expiry_date: date
-    manufacturing_date: date | None = None
+    expiry_date: Date
+    manufacturing_date: Date | None = None
     selling_price: Decimal = Field(ge=0)
 
 
