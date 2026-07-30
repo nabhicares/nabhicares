@@ -1,2 +1,0 @@
-Static output directory. Kept so the deployment's outputDirectory always resolves;
-all traffic is rewritten to the api/index.js function.

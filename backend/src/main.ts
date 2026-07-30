@@ -19,19 +19,23 @@ dotenv.config();
 
 // Throwing here would abort module load, and the platform can then only report a
 // generic FUNCTION_INVOCATION_FAILED with no cause. Holding the error and serving it
-// from the handler keeps the misconfiguration visible to whoever hits the URL.
-let startupError: Error | null = null;
+// keeps the misconfiguration visible to whoever hits the URL.
+let startupFailure: Error | null = null;
+
+function recordStartupFailure(err: unknown): void {
+  startupFailure = err instanceof Error ? err : new Error(String(err));
+  console.error('Startup failure:', startupFailure.stack ?? startupFailure.message);
+}
+
 try {
   assertCriticalEnv();
 } catch (err) {
-  startupError = err instanceof Error ? err : new Error(String(err));
-  console.error(startupError.message);
+  recordStartupFailure(err);
 }
 
 const server = express();
 // Vercel sits behind a reverse proxy — required for correct client IPs + rate limiting.
 server.set('trust proxy', 1);
-let isInitialized = false;
 
 // Security headers on every response (including pre-Nest cold starts).
 const helmetMiddleware = (helmet as any).default ?? (helmet as any);
@@ -56,6 +60,17 @@ server.use(
     referrerPolicy: { policy: 'no-referrer' },
   }),
 );
+
+// Registered before Nest attaches its router, because Nest binds routes before it
+// runs module init hooks — a provider that fails during init would otherwise leave
+// working routes in front of any error handler added afterwards.
+server.use((_req: any, res: any, next: any) => {
+  if (startupFailure) {
+    sendStartupFailure(res, startupFailure);
+    return;
+  }
+  next();
+});
 
 const rateLimitFn = (rateLimit as any).default ?? (rateLimit as any);
 
@@ -130,7 +145,7 @@ server.use('/api/v1/notifications/push', messagingLimiter);
 
 async function bootstrapNest() {
   // Imported lazily so a failure anywhere in the Nest dependency graph is thrown
-  // inside the handler's try/catch rather than aborting module load.
+  // while bootstrapping rather than aborting module load.
   const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     logger: isProductionRuntime() ? ['error', 'warn'] : ['log', 'error', 'warn', 'debug'],
@@ -184,12 +199,10 @@ async function bootstrapNest() {
   }
 
   await app.init();
-  isInitialized = true;
 }
 
+// Only the message goes over the wire; the stack is logged when the failure is recorded.
 function sendStartupFailure(res: any, err: Error): void {
-  // Full stack to the platform log; only the message goes over the wire.
-  console.error('Startup failure:', err.stack ?? err.message);
   if (res.headersSent) {
     return;
   }
@@ -213,34 +226,24 @@ function sendStartupFailure(res: any, err: Error): void {
   );
 }
 
-const handler = async (req: any, res: any) => {
-  try {
-    if (startupError) {
-      throw startupError;
-    }
-    if (!isInitialized) {
+async function bootstrap() {
+  if (!startupFailure) {
+    try {
       await bootstrapNest();
+    } catch (err) {
+      recordStartupFailure(err);
     }
-    server(req, res);
-  } catch (err) {
-    sendStartupFailure(res, err instanceof Error ? err : new Error(String(err)));
   }
-};
 
-// Local listener only outside production / Vercel.
-if (!startupError && !isProductionRuntime() && !process.env.VERCEL) {
-  const port = process.env.PORT || 3000;
-  bootstrapNest()
-    .then(() => {
-      server.listen(port, () => {
-        // Intentional local-only startup notice (not a debug dump of secrets).
-        process.stdout.write(`Listening on http://localhost:${port}/api/v1\n`);
-      });
-    })
-    .catch((err) => {
-      console.error(err instanceof Error ? err.message : err);
-      process.exit(1);
+  // Still bind the port on failure: a listener that explains the misconfiguration is
+  // far easier to diagnose than a dead process behind a generic platform error.
+  const port = process.env.PORT ?? 3000;
+  await new Promise<void>((resolve) => {
+    server.listen(port, () => {
+      process.stdout.write(`Listening on port ${port} (prefix /api/v1)\n`);
+      resolve();
     });
+  });
 }
 
-export default handler;
+void bootstrap();
