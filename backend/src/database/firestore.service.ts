@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { initializeFirestore } from 'firebase-admin/firestore';
 import { ConfigService } from '@nestjs/config';
 import { isProductionRuntime, isDemoMode } from '../common/config/env.validation';
 
@@ -225,7 +226,12 @@ export class FirestoreService implements OnModuleInit {
 
     if (!this.isMockMode) {
       try {
-        this.db = admin.firestore();
+        // A project can hold several named databases; the SDK only reaches "(default)"
+        // unless the id is given, and a wrong id fails as an opaque 5 NOT_FOUND.
+        const databaseId = this.configService.get<string>('FIRESTORE_DATABASE_ID')?.trim();
+        this.db = databaseId
+          ? initializeFirestore(admin.app(), {}, databaseId)
+          : admin.firestore();
         try {
           this.db.settings({ ignoreUndefinedProperties: true });
         } catch (settingsErr: any) {
