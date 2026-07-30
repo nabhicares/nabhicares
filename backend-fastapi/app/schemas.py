@@ -31,16 +31,26 @@ class DoctorCreate(BaseModel):
 
 
 class AppointmentCreate(BaseModel):
-    patient_id: uuid.UUID
-    doctor_id: uuid.UUID
-    branch_id: uuid.UUID | None = None
-    starts_at: datetime
-    ends_at: datetime | None = None
+    """Staff may send UUID + startsAt; patient/reception portals may send MRN + date + timeSlot."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    patient_id: str | None = Field(default=None, alias="patientId")
+    doctor_id: str | None = Field(default=None, alias="doctorId")
+    branch_id: uuid.UUID | None = Field(default=None, alias="branchId")
+    starts_at: datetime | None = Field(default=None, alias="startsAt")
+    ends_at: datetime | None = Field(default=None, alias="endsAt")
     reason: str | None = None
+    date: date | None = None
+    time_slot: str | None = Field(default=None, alias="timeSlot")
 
     @model_validator(mode="after")
-    def valid_range(self):
-        if self.ends_at and self.ends_at <= self.starts_at:
+    def require_identity_and_time(self):
+        if not self.patient_id or not self.doctor_id:
+            raise ValueError("patientId and doctorId are required")
+        if self.starts_at is None and (self.date is None or not self.time_slot):
+            raise ValueError("Provide startsAt, or date and timeSlot")
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
             raise ValueError("ends_at must be after starts_at")
         return self
 

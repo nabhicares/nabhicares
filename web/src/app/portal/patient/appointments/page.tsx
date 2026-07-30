@@ -1,60 +1,138 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import PortalShell from "@/components/portal-shell";
-import DataTable from "@/components/data-table";
-import Badge from "@/components/badge";
+import UiCard from "@/components/ui-card";
+import StatusChip from "@/components/status-chip";
+import SectionHeader from "@/components/section-header";
+import EmptyState from "@/components/empty-state";
 import Spinner from "@/components/spinner";
 import ErrorBox from "@/components/error-box";
+import PrimaryButton from "@/components/primary-button";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
-import { Home, CalendarDays, FileText, Receipt, MoreHorizontal } from "lucide-react";
+import { PATIENT_NAV } from "@/lib/patient-nav";
 
-const NAV = [
-  { href: "/portal/patient/home",         label: "Home",         icon: <Home size={16} /> },
-  { href: "/portal/patient/appointments", label: "Appointments", icon: <CalendarDays size={16} /> },
-  { href: "/portal/patient/prescriptions",label: "Prescriptions",icon: <FileText size={16} /> },
-  { href: "/portal/patient/invoices",     label: "Invoices",     icon: <Receipt size={16} /> },
-  { href: "/portal/patient/more",         label: "More",         icon: <MoreHorizontal size={16} /> },
-];
+type Appt = {
+  id: string;
+  doctorName?: string;
+  date?: string;
+  timeSlot?: string;
+  status?: string;
+};
+
+const HISTORY = new Set(["cancelled", "completed"]);
 
 export default function PatientAppointmentsPage() {
   const { user } = useAuth();
-  const [appts, setAppts] = useState<any[]>([]);
+  const [appts, setAppts] = useState<Appt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   async function load() {
-    if (!user) return;
+    if (!user?.patientId) return;
     setLoading(true);
     setError("");
     try {
-      // Without the filter this listed the whole hospital's appointments to the patient.
-      if (!user.patientId) throw new Error("This account is not linked to a patient record.");
-      const res = await api.get<any>(
-        `/appointments?patientId=${user.patientId}&limit=50`,
+      const res = await api.get<Appt[] | { items?: Appt[] }>(
+        `/appointments?patientId=${encodeURIComponent(user.patientId)}&limit=50`,
         user.token,
       );
       setAppts(Array.isArray(res) ? res : (res.items ?? []));
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => {
+    void load();
+  }, [user?.patientId, user?.token]);
+
+  const upcoming = useMemo(
+    () => appts.filter((a) => !HISTORY.has(a.status ?? "")),
+    [appts],
+  );
+  const history = useMemo(
+    () => appts.filter((a) => HISTORY.has(a.status ?? "")),
+    [appts],
+  );
+
+  async function cancel(id: string) {
+    if (!user) return;
+    if (!window.confirm("Cancel this appointment?")) return;
+    setCancelling(id);
+    try {
+      await api.patch(`/appointments/${id}/status`, user.token, { status: "cancelled" });
+      await load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Cancel failed");
+    } finally {
+      setCancelling(null);
+    }
+  }
+
+  function list(rows: Appt[], canCancel: boolean) {
+    if (rows.length === 0) return <EmptyState title="Nothing here yet" />;
+    return (
+      <div className="space-y-3">
+        {rows.map((a) => (
+          <UiCard key={a.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold text-ink">{a.doctorName ?? "Doctor"}</p>
+                <p className="text-sm text-muted mt-1">
+                  {a.date} · {a.timeSlot}
+                </p>
+              </div>
+              <StatusChip label={a.status ?? "booked"} />
+            </div>
+            {canCancel ? (
+              <PrimaryButton
+                variant="danger"
+                className="mt-3"
+                disabled={cancelling === a.id}
+                onClick={() => void cancel(a.id)}
+              >
+                {cancelling === a.id ? "Cancelling…" : "Cancel booking"}
+              </PrimaryButton>
+            ) : null}
+          </UiCard>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <PortalShell nav={NAV} title="My Appointments">
-      {loading ? <Spinner text="Loading…" /> : error ? <ErrorBox message={error} retry={load} /> : (
-        <DataTable
-          rows={appts}
-          columns={[
-            { key: "doctorName", label: "Doctor" },
-            { key: "date",       label: "Date" },
-            { key: "timeSlot",   label: "Time" },
-            { key: "status",     label: "Status", render: a => <Badge label={a.status} /> },
-          ]}
-          emptyText="No appointments"
-        />
+    <PortalShell
+      nav={PATIENT_NAV}
+      title="Bookings"
+      requireRole="patient"
+      hospitalSubtitle={user?.hospitalName}
+    >
+      {loading ? (
+        <Spinner text="Loading…" />
+      ) : error ? (
+        <ErrorBox message={error} retry={load} />
+      ) : (
+        <div className="mx-auto max-w-3xl space-y-6">
+          <div className="flex justify-end">
+            <Link href="/portal/patient/doctors" className="text-sm font-semibold text-brand">
+              Book a visit
+            </Link>
+          </div>
+          <section>
+            <SectionHeader title="Upcoming" />
+            {list(upcoming, true)}
+          </section>
+          <section>
+            <SectionHeader title="History" />
+            {list(history, false)}
+          </section>
+        </div>
       )}
     </PortalShell>
   );

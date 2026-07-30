@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -59,6 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(misconfigured !== null);
   const [error, setError] = useState(misconfigured ?? "");
+  // Survives token refreshes so we do not re-hit /me on every onIdTokenChanged fire.
+  const profileByUid = useRef<{ uid: string; profile: Omit<AuthUser, "token"> } | null>(null);
 
   useEffect(() => {
     if (misconfigured) return;
@@ -69,26 +72,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return onIdTokenChanged(auth, async (account: FirebaseUser | null) => {
       if (!account) {
+        profileByUid.current = null;
         setUser(null);
         setReady(true);
         return;
       }
       try {
         const token = await account.getIdToken();
+        const cached = profileByUid.current;
+        if (cached && cached.uid === account.uid) {
+          setUser({ ...cached.profile, token });
+          setError("");
+          setReady(true);
+          return;
+        }
+
         const profile = await api.get<Profile>("/me", token);
-        setUser({
+        const next: Omit<AuthUser, "token"> = {
           role: profile.role,
           email: profile.email ?? account.email ?? "",
           displayName: profile.displayName,
           hospitalName: profile.hospitalName,
           patientId: profile.patientId,
           doctorId: profile.doctorId,
-          token,
-        });
+        };
+        profileByUid.current = { uid: account.uid, profile: next };
+        setUser({ ...next, token });
         setError("");
       } catch (e) {
         // The credentials are valid to Firebase but the API has no active user for them.
         // Staying signed in would leave every page failing, so end the session here.
+        profileByUid.current = null;
         await signOut(auth);
         setUser(null);
         setError(
@@ -111,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    profileByUid.current = null;
     await signOut(getFirebaseAuth());
     setUser(null);
   }, []);

@@ -1,5 +1,6 @@
 import hashlib
 import time
+from datetime import UTC, datetime
 from typing import Annotated
 
 import cloudinary
@@ -75,7 +76,10 @@ async def me(session: Session, user: Authenticated):
     doctor_id = None
     display_name = None
     if user.id:
-        display_name = await session.scalar(select(User.display_name).where(User.id == user.id))
+        db_user = await session.scalar(select(User).where(User.id == user.id))
+        if db_user:
+            display_name = db_user.display_name
+            db_user.last_login = datetime.now(UTC)
         patient_id = await session.scalar(
             select(Patient.medical_record_number).where(
                 Patient.user_id == user.id, Patient.deleted_at.is_(None)
@@ -86,6 +90,7 @@ async def me(session: Session, user: Authenticated):
                 Doctor.user_id == user.id, Doctor.deleted_at.is_(None)
             )
         )
+        await session.commit()
     return {
         "id": str(user.id) if user.id else None,
         "email": user.email,
@@ -176,6 +181,36 @@ async def save_document_metadata(
     session.add(document)
     await session.commit()
     return serialize(document)
+
+
+@router.get("/notifications")
+async def list_notifications(
+    session: Session,
+    user: Authenticated,
+    page: int = 1,
+    limit: int = 50,
+):
+    """Inbox for the signed-in user (patient Alerts tab and staff hubs)."""
+    if user.id is None:
+        return {"items": [], "meta": {"page": page, "limit": limit, "total": 0}}
+    hospital_id = require_hospital(user)
+    await scope_session(session, user)
+    stmt = select(Notification).where(
+        Notification.hospital_id == hospital_id,
+        Notification.user_id == user.id,
+    )
+    total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = (
+        await session.scalars(
+            stmt.order_by(Notification.created_at.desc())
+            .offset((max(page, 1) - 1) * limit)
+            .limit(min(max(limit, 1), 100))
+        )
+    ).all()
+    return {
+        "items": [serialize(row) for row in rows],
+        "meta": {"page": page, "limit": limit, "total": total},
+    }
 
 
 @router.post("/notifications/device-token", status_code=201)

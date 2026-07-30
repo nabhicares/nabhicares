@@ -56,9 +56,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-stretch">
       {/* Left — brand */}
-      <div className="hidden lg:flex flex-col justify-between w-[42%] bg-[#0D1B35] px-14 py-12">
+      <div className="hidden lg:flex flex-col justify-between w-[42%] bg-brand-dark px-14 py-12">
         <div>
-          <div className="size-10 rounded-xl bg-[#0C6EFD] flex items-center justify-center mb-10">
+          <div className="size-10 rounded-xl bg-brand flex items-center justify-center mb-10">
             <span className="text-white font-bold">CF</span>
           </div>
           <h1 className="text-4xl font-extrabold text-white leading-tight mb-5">
@@ -66,13 +66,13 @@ export default function LoginPage() {
             <br />
             CareFlow
           </h1>
-          <p className="text-[#8FA3C4] text-base leading-relaxed max-w-xs">
+          <p className="text-white/70 text-base leading-relaxed max-w-xs">
             Unified hospital operations — EMR, pharmacy, front desk, and billing in one workspace.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-4">
           {["Inventory", "Appointments", "Billing", "Prescriptions"].map((f) => (
-            <div key={f} className="bg-white/5 rounded-xl px-4 py-3 text-sm text-[#8FA3C4]">
+            <div key={f} className="bg-white/5 rounded-xl px-4 py-3 text-sm text-white/70">
               {f}
             </div>
           ))}
@@ -80,14 +80,14 @@ export default function LoginPage() {
       </div>
 
       {/* Right — form */}
-      <div className="flex-1 flex items-center justify-center bg-[#F8F9FB] px-6 py-12">
+      <div className="flex-1 flex items-center justify-center bg-surface px-6 py-12">
         <form onSubmit={handleSubmit} className="w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-[#0D1B35] mb-1">Sign in</h2>
-          <p className="text-sm text-[#6B7891] mb-8">
+          <h2 className="text-2xl font-bold text-ink mb-1">Sign in</h2>
+          <p className="text-sm text-muted mb-8">
             Use your CareFlow account. Your role decides which portal opens.
           </p>
 
-          <label htmlFor="email" className="block text-xs font-medium text-[#6B7891] mb-1.5">
+          <label htmlFor="email" className="block text-xs font-medium text-muted mb-1.5">
             Email
           </label>
           <input
@@ -98,10 +98,10 @@ export default function LoginPage() {
             placeholder="you@hospital.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-[#E5E8EF] rounded-xl px-4 py-3 text-sm bg-white text-[#0D1B35] placeholder:text-[#A0AEC0] outline-none focus:ring-2 focus:ring-[#0C6EFD]/30 mb-5"
+            className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-white text-ink placeholder:text-muted-soft outline-none focus:ring-2 focus:ring-brand/30 mb-5"
           />
 
-          <label htmlFor="password" className="block text-xs font-medium text-[#6B7891] mb-1.5">
+          <label htmlFor="password" className="block text-xs font-medium text-muted mb-1.5">
             Password
           </label>
           <input
@@ -112,13 +112,13 @@ export default function LoginPage() {
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-[#E5E8EF] rounded-xl px-4 py-3 text-sm bg-white text-[#0D1B35] placeholder:text-[#A0AEC0] outline-none focus:ring-2 focus:ring-[#0C6EFD]/30 mb-5"
+            className="w-full border border-border rounded-xl px-4 py-3 text-sm bg-white text-ink placeholder:text-muted-soft outline-none focus:ring-2 focus:ring-brand/30 mb-5"
           />
 
           {message && (
             <p
               role="alert"
-              className="text-sm text-[#DC2626] bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5"
+              className="text-sm text-danger bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5"
             >
               {message}
             </p>
@@ -127,12 +127,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy || !ready}
-            className="w-full bg-[#0C6EFD] hover:bg-[#0952d6] text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-60"
+            className="w-full bg-brand hover:bg-brand-dark text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-60"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
 
-          <p className="text-xs text-center text-[#6B7891] mt-6">
+          <p className="text-xs text-center text-muted mt-6">
             Accounts are created by your hospital administrator.
           </p>
         </form>

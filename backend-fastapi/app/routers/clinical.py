@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta, time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -174,6 +175,18 @@ def _appointment_view(row: Appointment, names: dict[uuid.UUID, str]) -> dict:
     }
 
 
+def _starts_from_body(body: AppointmentCreate) -> tuple[datetime, datetime | None]:
+    if body.starts_at is not None:
+        return body.starts_at, body.ends_at
+    assert body.date is not None and body.time_slot
+    try:
+        hour, minute = (int(part) for part in body.time_slot.split(":", 1))
+    except ValueError as exc:
+        raise HTTPException(400, "timeSlot must be HH:MM") from exc
+    starts = datetime.combine(body.date, time(hour, minute), tzinfo=UTC)
+    return starts, starts + timedelta(minutes=30)
+
+
 @router.post("/appointments", status_code=201)
 async def create_appointment(
     body: AppointmentCreate,
@@ -185,20 +198,32 @@ async def create_appointment(
 ):
     hospital_id = require_hospital(user)
     await scope_session(session, user)
-    patient = await session.scalar(
-        select(Patient.id).where(Patient.id == body.patient_id, Patient.hospital_id == hospital_id)
-    )
-    doctor = await session.scalar(
-        select(Doctor.id).where(Doctor.id == body.doctor_id, Doctor.hospital_id == hospital_id)
-    )
-    if not patient or not doctor:
-        raise HTTPException(404, "Patient or doctor not found in this hospital")
+
+    patient_key = body.patient_id
+    if user.role == "patient":
+        if user.id is None:
+            raise HTTPException(400, "Patient account is not linked")
+        own_mrn = await session.scalar(
+            select(Patient.medical_record_number).where(
+                Patient.user_id == user.id,
+                Patient.hospital_id == hospital_id,
+                Patient.deleted_at.is_(None),
+            )
+        )
+        if own_mrn is None:
+            raise HTTPException(403, "No patient record for this account")
+        patient_key = own_mrn
+
+    assert patient_key and body.doctor_id
+    patient_id = await patient_uuid(session, hospital_id, patient_key)
+    doctor_id = await doctor_uuid(session, hospital_id, body.doctor_id)
+    starts_at, ends_at = _starts_from_body(body)
 
     collision = await session.scalar(
         select(Appointment.id).where(
             Appointment.hospital_id == hospital_id,
-            Appointment.doctor_id == body.doctor_id,
-            Appointment.starts_at == body.starts_at,
+            Appointment.doctor_id == doctor_id,
+            Appointment.starts_at == starts_at,
             Appointment.status.not_in(("cancelled", "completed")),
             Appointment.deleted_at.is_(None),
         )
@@ -207,7 +232,12 @@ async def create_appointment(
         raise HTTPException(409, "Doctor is already booked for this time")
 
     appointment = Appointment(
-        **body.model_dump(),
+        patient_id=patient_id,
+        doctor_id=doctor_id,
+        branch_id=body.branch_id,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        reason=body.reason,
         hospital_id=hospital_id,
         created_by=user.id,
         updated_by=user.id,
@@ -233,7 +263,15 @@ async def change_appointment_status(
     session: Session,
     user: Annotated[
         CurrentUser,
-        Depends(require_roles("super_admin", "hospital_admin", "receptionist", "doctor")),
+        Depends(
+            require_roles(
+                "super_admin",
+                "hospital_admin",
+                "receptionist",
+                "doctor",
+                "patient",
+            )
+        ),
     ],
 ):
     hospital_id = require_hospital(user)
@@ -249,6 +287,21 @@ async def change_appointment_status(
     )
     if not appointment:
         raise HTTPException(404, "Appointment not found")
+
+    if user.role == "patient":
+        if body.status != "cancelled":
+            raise HTTPException(403, "Patients may only cancel their appointments")
+        if user.id is None:
+            raise HTTPException(400, "Patient account is not linked")
+        own_patient_id = await session.scalar(
+            select(Patient.id).where(
+                Patient.user_id == user.id,
+                Patient.hospital_id == hospital_id,
+                Patient.deleted_at.is_(None),
+            )
+        )
+        if own_patient_id is None or appointment.patient_id != own_patient_id:
+            raise HTTPException(403, "Not your appointment")
 
     transitions = {
         "booked": {"confirmed", "cancelled"},

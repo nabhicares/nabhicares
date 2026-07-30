@@ -1,6 +1,5 @@
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Annotated
 
 import firebase_admin
@@ -110,8 +109,8 @@ async def get_current_user(
     if not row or row.User.status != "active":
         raise HTTPException(403, "Application user is not active")
 
-    row.User.last_login = datetime.now(UTC)
-    await session.commit()
+    # Do not write last_login here — every portal request hits this dependency, and a
+    # commit on Aiven from Vercel adds hundreds of ms. GET /me updates it once per session.
     return CurrentUser(
         row.User.id,
         row.User.firebase_uid,
