@@ -382,19 +382,20 @@ def main() -> int:
         connection.commit()
 
         print(f"Seeded demo data into hospital {hospital}")
-        for table in (
-            "doctor.doctors",
-            "patient.patients",
-            "inventory.medicines",
-            "inventory.medicine_batches",
-            "appointment.appointments",
-            "prescription.prescriptions",
-            "billing.invoices",
-            "supplier.suppliers",
-            "supplier.purchase_orders",
-        ):
-            cur.execute(f"select count(*) from {table}")
-            print(f"  {table}: {cur.fetchone()[0]}")
+        counts = (
+            ("doctor.doctors", "select count(*) from doctor.doctors"),
+            ("patient.patients", "select count(*) from patient.patients"),
+            ("inventory.medicines", "select count(*) from inventory.medicines"),
+            ("inventory.medicine_batches", "select count(*) from inventory.medicine_batches"),
+            ("appointment.appointments", "select count(*) from appointment.appointments"),
+            ("prescription.prescriptions", "select count(*) from prescription.prescriptions"),
+            ("billing.invoices", "select count(*) from billing.invoices"),
+            ("supplier.suppliers", "select count(*) from supplier.suppliers"),
+            ("supplier.purchase_orders", "select count(*) from supplier.purchase_orders"),
+        )
+        for label, sql in counts:
+            cur.execute(sql)
+            print(f"  {label}: {cur.fetchone()[0]}")
     return 0
 
 

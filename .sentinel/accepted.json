@@ -63,6 +63,33 @@
       "acceptedBy": "Salve Surya Raj",
       "acceptedAt": "2026-07-29",
       "expiresAt": "2026-10-27"
+    },
+    {
+      "fingerprint": "d01187fc526b9a33de030f723b0d29131f24cea4cd0786b47259c9c2ce302fff",
+      "rule": "gcp-api-key",
+      "file": "web/src/lib/firebase.ts",
+      "reason": "Firebase web API key embedded as the portal's default project identifier. Firebase documents that the web config is public and ships in every browser bundle; access is enforced by Firebase Auth plus the API's auth.users records, not by hiding this value. NEXT_PUBLIC_FIREBASE_* still overrides it when set.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-30",
+      "expiresAt": "2026-10-28"
+    },
+    {
+      "fingerprint": "6d471952247197726e53da2cf7821f398653002e0f03831f308d1c41eb7b05ef",
+      "rule": "generic-api-key",
+      "file": "backend/scratch/verify_deploy.js",
+      "reason": "Fixture BOOTSTRAP_SECRET literal '0123456789abcdef0123' used by a local NestJS deploy-check script so the API can boot with obviously fake config. Not a production secret and never shipped to Vercel.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-30",
+      "expiresAt": "2026-10-28"
+    },
+    {
+      "fingerprint": "e3e3ab09c8799559850d97564896c188ed2936007d74b2726a1d432485dadc70",
+      "rule": "generic-api-key",
+      "file": "backend/scratch/verify_startup_error.js",
+      "reason": "Same fixture BOOTSTRAP_SECRET '0123456789abcdef0123' from a since-deleted local verify script, still present only in git history. Not a production secret.",
+      "acceptedBy": "Salve Surya Raj",
+      "acceptedAt": "2026-07-30",
+      "expiresAt": "2026-10-28"
     }
   ]
 }

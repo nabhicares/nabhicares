@@ -29,7 +29,11 @@ export default function PatientPrescriptionsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get<any>("/prescriptions?patientId=BADP1K3A&limit=20", user.token);
+      if (!user.patientId) throw new Error("This account is not linked to a patient record.");
+      const res = await api.get<any>(
+        `/prescriptions?patientId=${user.patientId}&limit=20`,
+        user.token,
+      );
       setRxs(Array.isArray(res) ? res : (res.items ?? []));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

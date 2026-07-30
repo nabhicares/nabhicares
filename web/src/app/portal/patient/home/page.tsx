@@ -18,8 +18,6 @@ const NAV = [
   { href: "/portal/patient/more",         label: "More",         icon: <MoreHorizontal size={16} /> },
 ];
 
-const DEMO_PATIENT = "BADP1K3A";
-
 export default function PatientHomePage() {
   const { user } = useAuth();
   const [appts, setAppts] = useState<any[]>([]);
@@ -31,7 +29,11 @@ export default function PatientHomePage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get<any>(`/appointments?patientId=${DEMO_PATIENT}&limit=10`, user.token);
+      if (!user.patientId) throw new Error("This account is not linked to a patient record.");
+      const res = await api.get<any>(
+        `/appointments?patientId=${user.patientId}&limit=10`,
+        user.token,
+      );
       setAppts(Array.isArray(res) ? res : (res.items ?? []));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

@@ -29,7 +29,12 @@ export default function PatientAppointmentsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get<any>("/appointments?limit=50", user.token);
+      // Without the filter this listed the whole hospital's appointments to the patient.
+      if (!user.patientId) throw new Error("This account is not linked to a patient record.");
+      const res = await api.get<any>(
+        `/appointments?patientId=${user.patientId}&limit=50`,
+        user.token,
+      );
       setAppts(Array.isArray(res) ? res : (res.items ?? []));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

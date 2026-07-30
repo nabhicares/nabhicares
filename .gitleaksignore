@@ -1,0 +1,10 @@
+# Findings that only exist in git history and are not credentials. Format is
+# commit:path:rule:line — the value-based rules in .gitleaks.toml cannot clear a past commit.
+
+# backend/scratch/verify_startup_error.js set BOOTSTRAP_SECRET to the literal
+# "0123456789abcdef0123" so a deploy-check script could boot the API with obviously fake
+# config. The script has since been deleted.
+fbbf0643378558f27c6d7dc14938dcae940184c2:backend/scratch/verify_startup_error.js:generic-api-key:29
+
+# Same placeholder, still present in the current verify_deploy.js fixture.
+abc0f2fa8b0356ef4e5dfc14498769c3cd379233:backend/scratch/verify_deploy.js:generic-api-key:39

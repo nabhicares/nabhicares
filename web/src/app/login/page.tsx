@@ -1,39 +1,57 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
-import type { Role } from "@/lib/api";
+import { HOME, useAuth } from "@/lib/auth-context";
 
-const ROLES: { id: Role; label: string; emoji: string; home: string }[] = [
-  { id: "patient",       label: "Patient",        emoji: "🧑", home: "/portal/patient/home" },
-  { id: "doctor",        label: "Doctor",          emoji: "🩺", home: "/portal/doctor/dashboard" },
-  { id: "receptionist",  label: "Receptionist",    emoji: "🖥️", home: "/portal/reception/patients" },
-  { id: "pharmacist",    label: "Pharmacist",      emoji: "💊", home: "/portal/pharmacy/dispense" },
-  { id: "hospital_admin",label: "Hospital Admin",  emoji: "🏥", home: "/portal/admin/overview" },
-  { id: "super_admin",   label: "Super Admin",     emoji: "🔑", home: "/portal/admin/overview" },
-];
+function readable(e: unknown): string {
+  const code = typeof e === "object" && e !== null && "code" in e ? String(e.code) : "";
+  switch (code) {
+    case "auth/invalid-email":
+      return "That email address is not valid.";
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Email or password is incorrect.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Try again in a few minutes.";
+    case "auth/network-request-failed":
+      return "Cannot reach the sign-in service. Check your connection.";
+    default:
+      return e instanceof Error && e.message ? e.message : "Sign-in failed.";
+  }
+}
 
 export default function LoginPage() {
-  const { login, user } = useAuth();
+  const { login, user, ready, error: authError } = useAuth();
   const router = useRouter();
-  const [selected, setSelected] = useState<Role>("patient");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState("");
 
-  if (user) {
-    const home = ROLES.find(r => r.id === user.role)?.home ?? "/portal/admin/overview";
-    router.replace(home);
-    return null;
-  }
+  useEffect(() => {
+    if (user) router.replace(HOME[user.role]);
+  }, [user, router]);
 
-  function handleLogin() {
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setFailure("");
     setLoading(true);
-    const e = email.trim() || `demo_${selected}@pharmastore.com`;
-    login(selected, e);
-    const home = ROLES.find(r => r.id === selected)?.home ?? "/portal/admin/overview";
-    router.push(home);
+    try {
+      await login(email, password);
+    } catch (e) {
+      setFailure(readable(e));
+      setLoading(false);
+    }
   }
+
+  const message = failure || authError;
+  // The provider signs out accounts the API rejects, and that path never returns here, so
+  // its message is also what tells us to stop showing progress.
+  const busy = loading && !authError;
 
   return (
     <div className="min-h-screen flex items-stretch">
@@ -44,65 +62,80 @@ export default function LoginPage() {
             <span className="text-white font-bold">CF</span>
           </div>
           <h1 className="text-4xl font-extrabold text-white leading-tight mb-5">
-            PharmaStore<br />CareFlow
+            PharmaStore
+            <br />
+            CareFlow
           </h1>
           <p className="text-[#8FA3C4] text-base leading-relaxed max-w-xs">
             Unified hospital operations — EMR, pharmacy, front desk, and billing in one workspace.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          {["Inventory", "Appointments", "Billing", "Prescriptions"].map(f => (
-            <div key={f} className="bg-white/5 rounded-xl px-4 py-3 text-sm text-[#8FA3C4]">{f}</div>
+          {["Inventory", "Appointments", "Billing", "Prescriptions"].map((f) => (
+            <div key={f} className="bg-white/5 rounded-xl px-4 py-3 text-sm text-[#8FA3C4]">
+              {f}
+            </div>
           ))}
         </div>
       </div>
 
       {/* Right — form */}
       <div className="flex-1 flex items-center justify-center bg-[#F8F9FB] px-6 py-12">
-        <div className="w-full max-w-sm">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm">
           <h2 className="text-2xl font-bold text-[#0D1B35] mb-1">Sign in</h2>
-          <p className="text-sm text-[#6B7891] mb-8">Select your role for demo access</p>
+          <p className="text-sm text-[#6B7891] mb-8">
+            Use your CareFlow account. Your role decides which portal opens.
+          </p>
 
-          <div className="grid grid-cols-2 gap-2 mb-6">
-            {ROLES.map(r => (
-              <button
-                key={r.id}
-                onClick={() => setSelected(r.id)}
-                className={`flex items-center gap-2 px-3 py-3 rounded-xl border text-sm font-medium transition-all ${
-                  selected === r.id
-                    ? "border-[#0C6EFD] bg-[#0C6EFD]/10 text-[#0C6EFD]"
-                    : "border-[#E5E8EF] bg-white text-[#6B7891] hover:border-[#0C6EFD]/40"
-                }`}
-              >
-                <span>{r.emoji}</span>
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          <label className="block text-xs font-medium text-[#6B7891] mb-1.5">
-            Email (optional)
+          <label htmlFor="email" className="block text-xs font-medium text-[#6B7891] mb-1.5">
+            Email
           </label>
           <input
+            id="email"
             type="email"
-            placeholder={`demo_${selected}@pharmastore.com`}
+            autoComplete="username"
+            required
+            placeholder="you@hospital.com"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full border border-[#E5E8EF] rounded-xl px-4 py-3 text-sm bg-white text-[#0D1B35] placeholder:text-[#A0AEC0] outline-none focus:ring-2 focus:ring-[#0C6EFD]/30 mb-5"
           />
 
+          <label htmlFor="password" className="block text-xs font-medium text-[#6B7891] mb-1.5">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full border border-[#E5E8EF] rounded-xl px-4 py-3 text-sm bg-white text-[#0D1B35] placeholder:text-[#A0AEC0] outline-none focus:ring-2 focus:ring-[#0C6EFD]/30 mb-5"
+          />
+
+          {message && (
+            <p
+              role="alert"
+              className="text-sm text-[#DC2626] bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5"
+            >
+              {message}
+            </p>
+          )}
+
           <button
-            onClick={handleLogin}
-            disabled={loading}
+            type="submit"
+            disabled={busy || !ready}
             className="w-full bg-[#0C6EFD] hover:bg-[#0952d6] text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-60"
           >
-            {loading ? "Signing in…" : "Enter portal"}
+            {busy ? "Signing in…" : "Sign in"}
           </button>
 
           <p className="text-xs text-center text-[#6B7891] mt-6">
-            Demo mode — no real credentials needed
+            Accounts are created by your hospital administrator.
           </p>
-        </div>
+        </form>
       </div>
     </div>
   );

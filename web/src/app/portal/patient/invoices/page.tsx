@@ -18,8 +18,6 @@ const NAV = [
   { href: "/portal/patient/more",          label: "More",          icon: <MoreHorizontal size={16} /> },
 ];
 
-const DEMO_PATIENT = "BADP1K3A";
-
 export default function PatientInvoicesPage() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -31,7 +29,8 @@ export default function PatientInvoicesPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get<any>(`/billing/invoices/patient/${DEMO_PATIENT}`, user.token);
+      if (!user.patientId) throw new Error("This account is not linked to a patient record.");
+      const res = await api.get<any>(`/billing/invoices/patient/${user.patientId}`, user.token);
       setInvoices(Array.isArray(res) ? res : []);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

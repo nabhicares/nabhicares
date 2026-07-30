@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import Spinner from "@/components/spinner";
 
 export interface NavItem {
   href: string;
@@ -19,14 +20,28 @@ interface Props {
 }
 
 export default function PortalShell({ nav, children, title }: Props) {
-  const { user, logout } = useAuth();
+  const { user, ready, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  function handleLogout() {
-    logout();
-    router.push("/login");
+  useEffect(() => {
+    if (ready && !user) router.replace("/login");
+  }, [ready, user, router]);
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/login");
+  }
+
+  // Rendering the portal before the session is known would fire every request without a
+  // token, and each page would flash its own 401.
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
+        <Spinner text={ready ? "Redirecting to sign in…" : "Checking your session…"} />
+      </div>
+    );
   }
 
   const SidebarContent = () => (
@@ -100,10 +115,12 @@ export default function PortalShell({ nav, children, title }: Props) {
           </button>
           <h1 className="text-sm font-semibold text-[#0D1B35]">{title}</h1>
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-[#6B7891] hidden sm:block">{user?.email}</span>
+            <span className="text-xs text-[#6B7891] hidden sm:block">
+              {user.displayName ?? user.email}
+            </span>
             <div className="size-7 rounded-full bg-[#0C6EFD]/10 flex items-center justify-center">
               <span className="text-[10px] font-bold text-[#0C6EFD] uppercase">
-                {user?.email?.[0] ?? "U"}
+                {(user.displayName ?? user.email)?.[0] ?? "U"}
               </span>
             </div>
           </div>

@@ -28,7 +28,11 @@ export default function DoctorAppointmentsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get<any>("/appointments?limit=50", user.token);
+      if (!user.doctorId) throw new Error("This account is not linked to a doctor record.");
+      const res = await api.get<any>(
+        `/appointments?doctorId=${user.doctorId}&limit=50`,
+        user.token,
+      );
       setAppts(Array.isArray(res) ? res : (res.items ?? []));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

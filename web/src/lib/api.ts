@@ -1,6 +1,6 @@
 /**
  * Thin API client for the shared Nabhi Care API (web + mobile).
- * Bearer token = "mock-{role}" (demo mode) or a real Firebase ID token.
+ * Bearer token is a Firebase ID token; the API derives the tenant from the user record.
  */
 
 // A trailing slash here would produce "//path", which Vercel answers with a 308.
@@ -10,10 +10,6 @@ const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1")
   "",
 );
 
-// Seeded by backend-fastapi/scripts/seed_demo_hospital.py — required for mock-auth tenant scope.
-const HOSPITAL_ID =
-  process.env.NEXT_PUBLIC_HOSPITAL_ID ?? "11111111-1111-1111-1111-111111111111";
-
 export type Role =
   | "patient"
   | "doctor"
@@ -21,10 +17,6 @@ export type Role =
   | "pharmacist"
   | "hospital_admin"
   | "super_admin";
-
-export function makeToken(role: Role): string {
-  return `mock-${role}`;
-}
 
 export class ApiError extends Error {
   constructor(
@@ -41,7 +33,6 @@ async function call<T>(method: string, path: string, token: string, body?: unkno
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      "X-Hospital-ID": HOSPITAL_ID,
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",

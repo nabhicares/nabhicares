@@ -91,6 +91,12 @@ async def get_current_user(
     except Exception as exc:
         raise HTTPException(401, "Invalid or revoked Firebase ID token") from exc
 
+    # auth.users is tenant-isolated, and the tenant is what this lookup returns. The
+    # self_lookup policy opens exactly the caller's own row against this setting.
+    await session.execute(
+        text("SELECT set_config('app.firebase_uid', :value, true)"),
+        {"value": decoded["uid"]},
+    )
     result = await session.execute(
         select(User, Role.name)
         .join(Role, User.role_id == Role.id)

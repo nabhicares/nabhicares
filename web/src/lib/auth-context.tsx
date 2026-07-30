@@ -1,46 +1,123 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { type Role, makeToken } from "./api";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  browserSessionPersistence,
+  onIdTokenChanged,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut,
+  type User as FirebaseUser,
+} from "firebase/auth";
+import { api, type Role } from "./api";
+import { firebaseConfigError, getFirebaseAuth } from "./firebase";
 
 export interface AuthUser {
   role: Role;
   email: string;
+  displayName: string | null;
+  hospitalName: string | null;
+  /** Own records — the patient and doctor portals query by these instead of a fixed id. */
+  patientId: string | null;
+  doctorId: string | null;
+  /** Firebase ID token, replaced in place as Firebase refreshes it. */
   token: string;
+}
+
+/** Shape of GET /me. */
+interface Profile {
+  role: Role;
+  email: string | null;
+  displayName: string | null;
+  hospitalName: string | null;
+  patientId: string | null;
+  doctorId: string | null;
 }
 
 interface AuthCtx {
   user: AuthUser | null;
-  login: (role: Role, email: string) => void;
-  logout: () => void;
+  /** False until the first session check finishes, so pages don't bounce to /login. */
+  ready: boolean;
+  error: string;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
 
-const KEY = "cf_auth";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // A misconfigured build can never produce a session, so it starts out settled and failed
+  // rather than leaving every page waiting on a check that will not happen.
+  const misconfigured = firebaseConfigError();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [ready, setReady] = useState(misconfigured !== null);
+  const [error, setError] = useState(misconfigured ?? "");
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(KEY);
-      if (raw) setUser(JSON.parse(raw));
-    } catch {}
+    if (misconfigured) return;
+    const auth = getFirebaseAuth();
+    // Firebase persists to IndexedDB by default, which would sign the next person at a
+    // shared clinic machine straight back in.
+    void setPersistence(auth, browserSessionPersistence);
+
+    return onIdTokenChanged(auth, async (account: FirebaseUser | null) => {
+      if (!account) {
+        setUser(null);
+        setReady(true);
+        return;
+      }
+      try {
+        const token = await account.getIdToken();
+        const profile = await api.get<Profile>("/me", token);
+        setUser({
+          role: profile.role,
+          email: profile.email ?? account.email ?? "",
+          displayName: profile.displayName,
+          hospitalName: profile.hospitalName,
+          patientId: profile.patientId,
+          doctorId: profile.doctorId,
+          token,
+        });
+        setError("");
+      } catch (e) {
+        // The credentials are valid to Firebase but the API has no active user for them.
+        // Staying signed in would leave every page failing, so end the session here.
+        await signOut(auth);
+        setUser(null);
+        setError(
+          e instanceof Error && e.message
+            ? `Signed in, but the API rejected this account: ${e.message}`
+            : "Signed in, but this account has no portal access.",
+        );
+      } finally {
+        setReady(true);
+      }
+    });
+  }, [misconfigured]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setError("");
+    const auth = getFirebaseAuth();
+    await setPersistence(auth, browserSessionPersistence);
+    await signInWithEmailAndPassword(auth, email.trim(), password);
+    // onIdTokenChanged resolves the role and fills in `user`.
   }, []);
 
-  function login(role: Role, email: string) {
-    const u: AuthUser = { role, email, token: makeToken(role) };
-    sessionStorage.setItem(KEY, JSON.stringify(u));
-    setUser(u);
-  }
-
-  function logout() {
-    sessionStorage.removeItem(KEY);
+  const logout = useCallback(async () => {
+    await signOut(getFirebaseAuth());
     setUser(null);
-  }
+  }, []);
 
-  return <Ctx.Provider value={{ user, login, logout }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, ready, error, login, logout }}>{children}</Ctx.Provider>
+  );
 }
 
 export function useAuth() {
@@ -48,3 +125,13 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be inside AuthProvider");
   return ctx;
 }
+
+/** Landing page per role, shared by the login redirect and the portal guard. */
+export const HOME: Record<Role, string> = {
+  patient: "/portal/patient/home",
+  doctor: "/portal/doctor/dashboard",
+  receptionist: "/portal/reception/patients",
+  pharmacist: "/portal/pharmacy/dispense",
+  hospital_admin: "/portal/admin/overview",
+  super_admin: "/portal/admin/overview",
+};

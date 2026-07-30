@@ -17,8 +17,6 @@ const NAV = [
   { href: "/portal/doctor/more",        label: "More",         icon: <MoreHorizontal size={16} /> },
 ];
 
-const DEMO_DOCTOR = "5D4181ZA";
-
 export default function DoctorDashboardPage() {
   const { user } = useAuth();
   const [appts, setAppts] = useState<any[]>([]);
@@ -30,7 +28,11 @@ export default function DoctorDashboardPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get<any>(`/appointments?doctorId=${DEMO_DOCTOR}&limit=20`, user.token);
+      if (!user.doctorId) throw new Error("This account is not linked to a doctor record.");
+      const res = await api.get<any>(
+        `/appointments?doctorId=${user.doctorId}&limit=20`,
+        user.token,
+      );
       setAppts(Array.isArray(res) ? res : (res.items ?? []));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

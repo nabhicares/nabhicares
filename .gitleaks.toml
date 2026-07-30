@@ -14,3 +14,17 @@ paths = [
   '''(^|/)\.next/''',
   '''\.pyc$''',
 ]
+
+# Firebase's web config identifies the project to Firebase Auth; it is not a credential.
+# Every browser that loads the portal receives it, so keeping it out of the repo would hide it
+# from this scan without hiding it from anybody. Access is enforced by Firebase Auth and by the
+# API's own user records. Allowed by exact value, so any other Google key still fails the scan.
+[[allowlists]]
+description = "nabhi-cares Firebase web API key (public project identifier)"
+regexes = ['''AIzaSyDO2z6b2FUCzvCn6ET9nRZTc2pmFa80YSk''']
+
+# Local deploy-check scripts use this fixed string as a stand-in BOOTSTRAP_SECRET so the API
+# can boot without real config. It is not a production secret and is never shipped.
+[[allowlists]]
+description = "obviously-fake BOOTSTRAP_SECRET used by local verify scripts"
+regexes = ['''0123456789abcdef0123''']

@@ -23,10 +23,12 @@ from ..config import get_settings
 from ..db import get_session
 from ..models import (
     DeviceToken,
+    Doctor,
     Document,
     Hospital,
     Notification,
     NotificationLog,
+    Patient,
     Role,
     User,
 )
@@ -56,6 +58,44 @@ ROLE_NAMES = (
     "pharmacist",
     "patient",
 )
+
+
+@router.get("/me")
+async def me(session: Session, user: Authenticated):
+    # A Firebase ID token carries no role, and the patient and doctor portals address
+    # their own records by medical record / registration number, so the client has no way
+    # to know who it is until it asks.
+    await scope_session(session, user)
+    hospital_name = None
+    if user.hospital_id:
+        hospital_name = await session.scalar(
+            select(Hospital.name).where(Hospital.id == user.hospital_id)
+        )
+    patient_id = None
+    doctor_id = None
+    display_name = None
+    if user.id:
+        display_name = await session.scalar(select(User.display_name).where(User.id == user.id))
+        patient_id = await session.scalar(
+            select(Patient.medical_record_number).where(
+                Patient.user_id == user.id, Patient.deleted_at.is_(None)
+            )
+        )
+        doctor_id = await session.scalar(
+            select(Doctor.registration_number).where(
+                Doctor.user_id == user.id, Doctor.deleted_at.is_(None)
+            )
+        )
+    return {
+        "id": str(user.id) if user.id else None,
+        "email": user.email,
+        "displayName": display_name,
+        "role": user.role,
+        "hospitalId": str(user.hospital_id) if user.hospital_id else None,
+        "hospitalName": hospital_name,
+        "patientId": patient_id,
+        "doctorId": doctor_id,
+    }
 
 
 @router.post("/bootstrap", status_code=201)
