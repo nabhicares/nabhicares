@@ -16,11 +16,14 @@ class PrescriptionItem {
   });
 
   factory PrescriptionItem.fromJson(Map<String, dynamic> json) {
+    final durationDays = json['durationDays'];
+    final duration = json['duration'] as String? ??
+        (durationDays == null ? '' : '$durationDays days');
     return PrescriptionItem(
-      medicineId: json['medicineId'] as String? ?? '',
+      medicineId: json['medicineId'] as String? ?? json['id'] as String? ?? '',
       medicineName: json['medicineName'] as String? ?? '',
       dosage: json['dosage'] as String? ?? '',
-      duration: json['duration'] as String? ?? '',
+      duration: duration,
       instructions: json['instructions'] as String? ?? '',
       status: json['status'] as String? ?? 'pending',
     );

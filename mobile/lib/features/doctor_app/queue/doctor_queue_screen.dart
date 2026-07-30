@@ -178,7 +178,7 @@ class _DoctorQueueScreenState extends ConsumerState<DoctorQueueScreen> {
   Future<void> _complete(Appointment appointment) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(careRepositoryPrv).completeAppointment(appointment.id);
+      await ref.read(careRepositoryPrv).setAppointmentStatus(appointment.id, 'completed');
       ref.invalidate(doctorAppointmentsPrv);
       messenger.showSnackBar(
         SnackBar(content: Text('Marked ${appointment.patientName} as completed')),

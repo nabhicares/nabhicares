@@ -10,14 +10,35 @@ class ORMModel(BaseModel):
 
 
 class PatientCreate(BaseModel):
+    """Front desk registration. The record number is issued here when not supplied."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
     name: str = Field(min_length=2, max_length=160)
-    medical_record_number: str = Field(min_length=1, max_length=60)
-    date_of_birth: Date | None = None
+    medical_record_number: str | None = Field(
+        default=None, min_length=1, max_length=60, alias="medicalRecordNumber"
+    )
+    date_of_birth: Date | None = Field(default=None, alias="dateOfBirth")
     gender: str | None = Field(default=None, max_length=30)
     phone: str | None = Field(default=None, max_length=30)
     email: str | None = Field(default=None, max_length=255)
-    blood_group: str | None = Field(default=None, max_length=8)
+    blood_group: str | None = Field(default=None, max_length=8, alias="bloodGroup")
     address: str | None = None
+
+
+class PatientUpdate(BaseModel):
+    """Every field optional: the front desk corrects one detail at a time."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    date_of_birth: Date | None = Field(default=None, alias="dateOfBirth")
+    gender: str | None = Field(default=None, max_length=30)
+    phone: str | None = Field(default=None, max_length=30)
+    email: str | None = Field(default=None, max_length=255)
+    blood_group: str | None = Field(default=None, max_length=8, alias="bloodGroup")
+    address: str | None = None
+    status: str | None = Field(default=None, pattern="^(active|inactive)$")
 
 
 class DoctorCreate(BaseModel):

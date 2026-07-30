@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
-import '../../../core/network/dio_client.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../shared_models/doctor_profile.dart';
+import '../../care/data/care_repository.dart';
+
+/// Slots the doctor still has free on a given day.
+final _freeSlotsPrv = FutureProvider.autoDispose
+    .family<List<String>, ({String doctor, String date})>((ref, key) {
+  return ref.watch(careRepositoryPrv).fetchFreeSlots(key.doctor, key.date);
+});
+
+String _isoDate(DateTime day) =>
+    '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
 
 class BookingScreen extends ConsumerStatefulWidget {
-  final String doctorId;
-  final String doctorName;
-  final String specialty;
-  final double fee;
+  final DoctorProfile doctor;
 
-  const BookingScreen({
-    super.key,
-    required this.doctorId,
-    required this.doctorName,
-    required this.specialty,
-    required this.fee,
-  });
+  const BookingScreen({super.key, required this.doctor});
 
   @override
   ConsumerState<BookingScreen> createState() => _BookingScreenState();
@@ -28,71 +29,50 @@ class BookingScreen extends ConsumerStatefulWidget {
 class _BookingScreenState extends ConsumerState<BookingScreen> {
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
   String? _selectedTimeSlot;
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
   bool _isSubmitting = false;
 
-  final List<String> _timeSlots = [
-    '09:00',
-    '10:00',
-    '11:00',
-    '12:00',
-    '14:00',
-    '15:00',
-    '16:00',
-  ];
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
+  String get _doctorKey => widget.doctor.registrationNumber.isNotEmpty
+      ? widget.doctor.registrationNumber
+      : widget.doctor.id;
 
   Future<void> _handleBooking() async {
-    if (_selectedTimeSlot == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an appointment time slot.')),
+    final recordNumber = ref.read(authStatePrv).patientId;
+    if (recordNumber.isEmpty) {
+      _showError(
+        'This login is not linked to a patient record yet. '
+        'Ask the hospital front desk to link it.',
       );
+      return;
+    }
+    if (_selectedTimeSlot == null) {
+      _showError('Choose an appointment time.');
       return;
     }
 
     setState(() => _isSubmitting = true);
-
     try {
-      final dio = ref.read(dioClientPrv);
-      final formattedDate = "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
-      
-      final response = await dio.post('/appointments', data: {
-        'patientId': 'BADP1K3A', // Matches default seeded patient ID
-        'doctorId': widget.doctorId,
-        'date': formattedDate,
-        'timeSlot': _selectedTimeSlot,
-      });
-
+      await ref.read(careRepositoryPrv).bookAppointment(
+            patientId: recordNumber,
+            doctorId: _doctorKey,
+            date: _isoDate(_selectedDate),
+            timeSlot: _selectedTimeSlot!,
+          );
+      ref.invalidate(patientAppointmentsPrv);
       if (mounted) {
         setState(() => _isSubmitting = false);
-        if (response.data != null && response.data['success'] == true) {
-          _showSuccessDialog();
-        } else {
-          _showError(response.data['error']?['message'] ?? 'Failed to book slot.');
-        }
+        _showSuccessDialog();
       }
-    } on DioException catch (e) {
+    } catch (error) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        final errorMsg = e.response?.data?['error']?['message'] ?? 'Conflict: Slot already occupied.';
-        _showError(errorMsg);
+        _showError('$error');
       }
     }
   }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.critical,
-      ),
+      SnackBar(content: Text(message), backgroundColor: AppColors.critical),
     );
   }
 
@@ -106,17 +86,18 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
           children: [
             Icon(Icons.check_circle_rounded, color: AppColors.success, size: 28),
             SizedBox(width: 12),
-            Text('Booking Confirmed!'),
+            Text('Visit booked'),
           ],
         ),
         content: Text(
-          'Your appointment with ${widget.doctorName} is successfully booked for ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year} at $_selectedTimeSlot.',
+          'Your appointment with ${widget.doctor.name} is booked for '
+          '${formatDate(_isoDate(_selectedDate))} at $_selectedTimeSlot.',
         ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Pop dialog
-              Navigator.pop(context); // Pop booking screen
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
             child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
@@ -126,15 +107,16 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   }
 
   Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime.now().add(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
     );
     if (picked != null && picked != _selectedDate) {
       setState(() {
         _selectedDate = picked;
+        _selectedTimeSlot = null;
       });
     }
   }
@@ -142,16 +124,15 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final slotsAsync = ref.watch(
+      _freeSlotsPrv((doctor: _doctorKey, date: _isoDate(_selectedDate))),
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           'Schedule Visit',
           style: theme.textTheme.titleLarge?.copyWith(
@@ -165,13 +146,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Selected Doctor Summary Card
             AppCard(
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                     child: const Icon(Icons.person, color: AppColors.primary),
                   ),
                   const SizedBox(width: 16),
@@ -180,12 +160,19 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.doctorName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          widget.doctor.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         Text(
-                          '${widget.specialty} • consultation fee ${formatCurrency(widget.fee)}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          '${widget.doctor.specialty.isEmpty ? 'General medicine' : widget.doctor.specialty}'
+                          ' • ${formatCurrency(widget.doctor.consultationFee)}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -194,14 +181,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Step 1: Select Date
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '1. Choose Date',
+                    '1. Choose date',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
@@ -222,10 +207,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.calendar_today, color: AppColors.primary, size: 20),
+                              const Icon(
+                                Icons.calendar_today,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
                               const SizedBox(width: 12),
                               Text(
-                                '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                                formatDate(_isoDate(_selectedDate)),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.textPrimary,
@@ -234,7 +223,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                             ],
                           ),
                           const Text(
-                            'Change Date',
+                            'Change',
                             style: TextStyle(
                               color: AppColors.primary,
                               fontWeight: FontWeight.bold,
@@ -249,56 +238,73 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Step 2: Select Time Slot
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '2. Choose Time Slot',
+                    '2. Choose time',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: _timeSlots.map((slot) {
-                      final isSelected = _selectedTimeSlot == slot;
-                      return ChoiceChip(
-                        label: Text(slot),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedTimeSlot = selected ? slot : null;
-                          });
-                        },
-                        selectedColor: AppColors.primary,
-                        backgroundColor: AppColors.background,
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(
-                            color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                  slotsAsync.when(
+                    loading: () => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    error: (error, _) => Text(
+                      'Could not check availability: $error',
+                      style: const TextStyle(color: AppColors.critical, fontSize: 13),
+                    ),
+                    data: (slots) => slots.isEmpty
+                        ? const Text(
+                            'Fully booked on this date. Pick another day.',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          )
+                        : Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              for (final slot in slots)
+                                ChoiceChip(
+                                  label: Text(slot),
+                                  selected: _selectedTimeSlot == slot,
+                                  onSelected: (selected) => setState(
+                                    () => _selectedTimeSlot = selected ? slot : null,
+                                  ),
+                                  selectedColor: AppColors.primary,
+                                  backgroundColor: AppColors.background,
+                                  labelStyle: TextStyle(
+                                    color: _selectedTimeSlot == slot
+                                        ? Colors.white
+                                        : AppColors.textPrimary,
+                                    fontWeight: _selectedTimeSlot == slot
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(
+                                      color: _selectedTimeSlot == slot
+                                          ? AppColors.primary
+                                          : Colors.grey.shade200,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                      );
-                    }).toList(),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 28),
-
-            // Book Button
             AppButton(
-              label: 'Confirm and Book Slot',
+              label: 'Confirm booking',
               isLoading: _isSubmitting,
               onPressed: _handleBooking,
             ),

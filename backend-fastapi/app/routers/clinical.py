@@ -21,7 +21,10 @@ from ..schemas import (
     AppointmentStatusUpdate,
     DoctorCreate,
     PatientCreate,
+    PatientUpdate,
 )
+
+CLINICAL_STAFF = require_roles("super_admin", "hospital_admin", "receptionist", "doctor")
 
 router = APIRouter()
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -55,15 +58,15 @@ async def list_patients(
 async def create_patient(
     body: PatientCreate,
     session: Session,
-    user: Annotated[
-        CurrentUser,
-        Depends(require_roles("super_admin", "hospital_admin", "receptionist", "doctor")),
-    ],
+    user: Annotated[CurrentUser, Depends(CLINICAL_STAFF)],
 ):
     hospital_id = require_hospital(user)
     await scope_session(session, user)
+    fields = body.model_dump()
+    if not fields.get("medical_record_number"):
+        fields["medical_record_number"] = await _next_record_number(session, hospital_id)
     patient = Patient(
-        **body.model_dump(),
+        **fields,
         hospital_id=hospital_id,
         created_by=user.id,
         updated_by=user.id,
@@ -71,6 +74,52 @@ async def create_patient(
     session.add(patient)
     await session.commit()
     return serialize(patient)
+
+
+@router.patch("/patients/{patient_id}")
+async def update_patient(
+    patient_id: str,
+    body: PatientUpdate,
+    session: Session,
+    user: Annotated[CurrentUser, Depends(CLINICAL_STAFF)],
+):
+    hospital_id = require_hospital(user)
+    await scope_session(session, user)
+    patient = await session.scalar(
+        select(Patient).where(
+            Patient.id == await patient_uuid(session, hospital_id, patient_id),
+            Patient.hospital_id == hospital_id,
+            Patient.deleted_at.is_(None),
+        )
+    )
+    if not patient:
+        raise HTTPException(404, "Patient not found")
+    for key, value in body.model_dump(exclude_unset=True).items():
+        setattr(patient, key, value)
+    patient.updated_by = user.id
+    payload = serialize(patient)
+    await session.commit()
+    return payload
+
+
+async def _next_record_number(session: AsyncSession, hospital_id: uuid.UUID) -> str:
+    """Sequential per hospital, so the front desk can read it back over the phone."""
+    used = await session.scalar(
+        select(func.count())
+        .select_from(Patient)
+        .where(Patient.hospital_id == hospital_id)
+    )
+    while True:
+        used = (used or 0) + 1
+        candidate = f"MRN{used:06d}"
+        taken = await session.scalar(
+            select(Patient.id).where(
+                Patient.hospital_id == hospital_id,
+                Patient.medical_record_number == candidate,
+            )
+        )
+        if taken is None:
+            return candidate
 
 
 @router.get("/doctors")

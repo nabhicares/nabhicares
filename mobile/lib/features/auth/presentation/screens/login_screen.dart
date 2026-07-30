@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/router/app_router.dart';
+import '../../../../core/auth/auth_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -15,8 +15,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _selectedRole = 'patient';
   bool _isLoading = false;
+  String _failure = '';
 
   @override
   void dispose() {
@@ -25,24 +25,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _handleMockLogin(String role) {
-    setState(() => _isLoading = true);
-    final email = _emailController.text.trim().isNotEmpty
-        ? _emailController.text.trim()
-        : 'demo_$role@pharmastore.com';
+  Future<void> _handleSignIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _failure = 'Enter your email and password.');
+      return;
+    }
 
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ref.read(authStatePrv.notifier).login(role, email);
-      }
+    setState(() {
+      _isLoading = true;
+      _failure = '';
     });
+    try {
+      // The role comes from the hospital's user record, never from the device.
+      await ref.read(authStatePrv.notifier).signIn(email, password);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _failure = error.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+    final message = _failure.isNotEmpty ? _failure : ref.watch(authStatePrv).error;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -53,7 +65,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Header Logo and Branding
                 const Icon(
                   Icons.local_hospital_rounded,
                   size: 72,
@@ -61,7 +72,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'PharmaStore CareFlow',
+                  'Nabhi Care',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
@@ -78,133 +89,83 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
-                // Form Card
                 AppCard(
                   elevation: 2,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Select Portal Access',
+                        'Sign in',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      
-                      // Role selector chips
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildRoleChip('patient', 'Patient', Icons.person_outline),
-                          _buildRoleChip('doctor', 'Doctor', Icons.medical_services_outlined),
-                          _buildRoleChip('receptionist', 'Receptionist', Icons.desk_outlined),
-                          _buildRoleChip('pharmacist', 'Pharmacist', Icons.medication_liquid_outlined),
-                          _buildRoleChip('hospital_admin', 'Admin', Icons.admin_panel_settings_outlined),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Your role decides which portal opens.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                      const SizedBox(height: 24),
-                      
-                      // Input Fields
+                      const SizedBox(height: 20),
                       TextField(
                         controller: _emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email Address',
-                          hintText: 'Enter your registered email',
-                          prefixIcon: const Icon(Icons.email_outlined, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade200),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                          ),
+                        decoration: _fieldDecoration(
+                          label: 'Email Address',
+                          hint: 'you@hospital.com',
+                          icon: Icons.email_outlined,
                         ),
                         keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.username],
+                        textInputAction: TextInputAction.next,
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          hintText: 'Enter your secure credentials',
-                          prefixIcon: const Icon(Icons.lock_outlined, size: 20),
-                          border: OutlineInputBorder(
+                        decoration: _fieldDecoration(
+                          label: 'Password',
+                          hint: 'Enter your password',
+                          icon: Icons.lock_outlined,
+                        ),
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _handleSignIn(),
+                      ),
+                      if (message.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.critical.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey.shade200),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          child: Text(
+                            message,
+                            style: const TextStyle(
+                              color: AppColors.critical,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                       const SizedBox(height: 24),
-                      
-                      // Sign In Button
                       AppButton(
                         label: 'Sign In to Portal',
                         isLoading: _isLoading,
-                        onPressed: () => _handleMockLogin(_selectedRole),
+                        onPressed: _handleSignIn,
                       ),
                     ],
                   ),
                 ),
-                
-                const SizedBox(height: 32),
-                
-                // Testing Suite panel
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber.shade200),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.bug_report_outlined, size: 16, color: Colors.amber.shade800),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Developer Quick Bypass Options',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.amber.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: 24),
+                Text(
+                  'Accounts are created by your hospital administrator.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textMuted,
                   ),
-                ),
-                const SizedBox(height: 12),
-                
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    _buildBypassButton('Patient', 'patient', AppColors.success),
-                    _buildBypassButton('Doctor', 'doctor', AppColors.primary),
-                    _buildBypassButton('Receptionist', 'receptionist', AppColors.warning),
-                    _buildBypassButton('Pharmacist', 'pharmacist', AppColors.secondary),
-                    _buildBypassButton('Admin', 'hospital_admin', AppColors.textPrimary),
-                  ],
                 ),
               ],
             ),
@@ -214,51 +175,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildRoleChip(String role, String label, IconData icon) {
-    final isSelected = _selectedRole == role;
-    return ChoiceChip(
-      avatar: Icon(
-        icon,
-        size: 16,
-        color: isSelected ? Colors.white : AppColors.textSecondary,
+  InputDecoration _fieldDecoration({
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 20),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade300),
       ),
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        if (selected) {
-          setState(() => _selectedRole = role);
-        }
-      },
-      selectedColor: AppColors.primary,
-      backgroundColor: Colors.white,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : AppColors.textPrimary,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade200),
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: isSelected ? AppColors.primary : Colors.grey.shade300,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBypassButton(String label, String role, Color color) {
-    return SizedBox(
-      height: 36,
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: color),
-          foregroundColor: color,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-        onPressed: () => _handleMockLogin(role),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-        ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
       ),
     );
   }

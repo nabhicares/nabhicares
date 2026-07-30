@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/router/app_router.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
 
 /// Lean More tab for front-desk staff (no inventory/pharmacy links).
@@ -37,7 +37,7 @@ class ReceptionMoreScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        auth.email.isEmpty ? 'Reception desk' : auth.email,
+                        auth.shortName.isEmpty ? 'Reception desk' : auth.shortName,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -46,7 +46,9 @@ class ReceptionMoreScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        auth.role.replaceAll('_', ' '),
+                        auth.hospitalName.isEmpty
+                            ? auth.role.replaceAll('_', ' ')
+                            : auth.hospitalName,
                         style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                       ),
                     ],

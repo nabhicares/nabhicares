@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_config.dart';
-import '../router/app_router.dart';
 
 final dioClientPrv = Provider<Dio>((ref) {
   final dio = Dio(
@@ -18,19 +18,17 @@ final dioClientPrv = Provider<Dio>((ref) {
 
   dio.interceptors.add(
     InterceptorsWrapper(
-      onRequest: (options, handler) {
-        final authState = ref.read(authStatePrv);
-        if (authState.isAuthenticated) {
-          // Opaque mock session token — role only, no email/PII in the header.
-          options.headers['Authorization'] = 'Bearer mock-${authState.role}';
+      onRequest: (options, handler) async {
+        // Read the token per request rather than caching it: Firebase rotates ID
+        // tokens roughly hourly and getIdToken refreshes an expired one for us.
+        final account = FirebaseAuth.instance.currentUser;
+        if (account != null) {
+          final token = await account.getIdToken();
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
         }
         return handler.next(options);
-      },
-      onResponse: (response, handler) {
-        return handler.next(response);
-      },
-      onError: (DioException error, handler) {
-        return handler.next(error);
       },
     ),
   );

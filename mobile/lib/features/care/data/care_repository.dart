@@ -1,49 +1,74 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../shared_models/app_notification.dart';
 import '../../../shared_models/appointment.dart';
 import '../../../shared_models/doctor_profile.dart';
 import '../../../shared_models/invoice.dart';
 import '../../../shared_models/patient_record.dart';
 import '../../../shared_models/prescription.dart';
-import '../../../shared_models/user_profile.dart';
 
-/// Seeded demo IDs used when the mock login token does not map 1:1 to Firestore.
-class CareDemoIds {
-  static const doctorId = '5D4181ZA';
-  static const patientId = 'BADP1K3A';
-}
+/// Consultation slots offered to patients, matching the web portal.
+const consultationSlots = [
+  '09:00',
+  '09:30',
+  '10:00',
+  '10:30',
+  '11:00',
+  '11:30',
+  '14:00',
+  '14:30',
+  '15:00',
+  '15:30',
+  '16:00',
+  '16:30',
+];
 
 class CareRepository {
   final ApiClient _api;
 
   CareRepository(this._api);
 
-  Future<List<Appointment>> fetchDoctorAppointments(String doctorId) async {
-    final result = await _api.get('/appointments/doctor/$doctorId');
+  Future<List<Appointment>> fetchDoctorAppointments(String registration) async {
+    final result = await _api.get(
+      '/appointments',
+      query: {'doctorId': registration, 'limit': 100},
+    );
     return result.list.map(Appointment.fromJson).toList();
   }
 
-  Future<List<Appointment>> fetchPatientAppointments(String patientId) async {
-    final result = await _api.get('/appointments/patient/$patientId');
+  Future<List<Appointment>> fetchPatientAppointments(String recordNumber) async {
+    final result = await _api.get(
+      '/appointments',
+      query: {'patientId': recordNumber, 'limit': 100},
+    );
     return result.list.map(Appointment.fromJson).toList();
   }
 
-  Future<void> completeAppointment(String id) =>
-      _api.put('/appointments/$id/complete');
+  /// Statuses a visit moves through, in order. The API rejects a jump.
+  static const visitStages = [
+    'booked',
+    'confirmed',
+    'checked_in',
+    'consultation',
+    'completed',
+  ];
+
+  Future<void> setAppointmentStatus(String id, String status, {String? note}) {
+    return _api.patch(
+      '/appointments/$id/status',
+      body: {'status': status, if (note != null) 'note': note},
+    );
+  }
 
   Future<void> cancelAppointment(String id) =>
-      _api.put('/appointments/$id/cancel');
+      setAppointmentStatus(id, 'cancelled');
 
-  Future<List<PatientRecord>> fetchPatients() async {
-    final result = await _api.get('/patients');
+  Future<List<PatientRecord>> fetchPatients({String? query}) async {
+    final result = await _api.get('/patients', query: {'q': query, 'limit': 100});
     return result.list.map(PatientRecord.fromJson).toList();
-  }
-
-  Future<PatientRecord> fetchPatient(String id) async {
-    final result = await _api.get('/patients/$id');
-    return PatientRecord.fromJson(result.map);
   }
 
   Future<PatientRecord> createPatient(Map<String, dynamic> body) async {
@@ -52,7 +77,7 @@ class CareRepository {
   }
 
   Future<PatientRecord> updatePatient(String id, Map<String, dynamic> body) async {
-    final result = await _api.put('/patients/$id', body: body);
+    final result = await _api.patch('/patients/$id', body: body);
     return PatientRecord.fromJson(result.map);
   }
 
@@ -71,57 +96,44 @@ class CareRepository {
     return Appointment.fromJson(result.map);
   }
 
-  Future<List<Map<String, dynamic>>> fetchDoctorSlots(String doctorId, String date) async {
-    final result = await _api.get('/doctors/$doctorId/slots', query: {'date': date});
-    return (result.data as List<dynamic>? ?? [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+  /// Slots the doctor still has free on [date].
+  Future<List<String>> fetchFreeSlots(String registration, String date) async {
+    final booked = (await fetchDoctorAppointments(registration))
+        .where((a) => a.date == date && a.status != 'cancelled')
+        .map((a) => a.timeSlot)
+        .toSet();
+    return consultationSlots.where((slot) => !booked.contains(slot)).toList();
   }
 
   Future<void> recordPayment({
     required String invoiceId,
     required double amount,
     required String method,
+    String? reference,
   }) async {
-    await _api.post('/billing/invoices/$invoiceId/pay', body: {
+    await _api.post('/billing/payments', body: {
+      'invoice_id': invoiceId,
       'amount': amount,
-      'method': method,
+      'payment_method': method,
+      if (reference != null) 'transaction_reference': reference,
     });
   }
 
   Future<List<DoctorProfile>> fetchDoctors() async {
-    final result = await _api.get('/doctors');
+    final result = await _api.get('/doctors', query: {'limit': 100});
     return result.list.map(DoctorProfile.fromJson).toList();
   }
 
-  Future<DoctorProfile> fetchDoctor(String id) async {
-    final result = await _api.get('/doctors/$id');
-    return DoctorProfile.fromJson(result.map);
-  }
-
-  Future<DoctorSchedule> fetchSchedule(String doctorId) async {
-    final result = await _api.get('/doctors/$doctorId/schedule');
-    return DoctorSchedule.fromJson(result.map);
-  }
-
-  Future<void> saveSchedule({
-    required String doctorId,
-    required int slotDurationMinutes,
-    required List<DaySchedule> weeklySchedules,
-  }) {
-    return _api.put('/doctors/$doctorId/schedule', body: {
-      'slotDurationMinutes': slotDurationMinutes,
-      'weeklySchedules': weeklySchedules.map((e) => e.toJson()).toList(),
-    });
-  }
-
-  Future<List<Prescription>> fetchPatientPrescriptions(String patientId) async {
-    final result = await _api.get('/prescriptions/patient/$patientId');
+  Future<List<Prescription>> fetchPatientPrescriptions(String recordNumber) async {
+    final result = await _api.get(
+      '/prescriptions',
+      query: {'patientId': recordNumber, 'limit': 100},
+    );
     return result.list.map(Prescription.fromJson).toList();
   }
 
-  Future<List<Invoice>> fetchPatientInvoices(String patientId) async {
-    final result = await _api.get('/billing/invoices/patient/$patientId');
+  Future<List<Invoice>> fetchPatientInvoices(String recordNumber) async {
+    final result = await _api.get('/billing/invoices/patient/$recordNumber');
     return result.list.map(Invoice.fromJson).toList();
   }
 
@@ -129,53 +141,75 @@ class CareRepository {
     final result = await _api.get('/notifications');
     return result.list.map(AppNotification.fromJson).toList();
   }
-
-  Future<UserProfile> fetchMe() async {
-    final result = await _api.get('/users/me');
-    return UserProfile.fromJson(result.map);
-  }
-
-  Future<void> deleteMyAccount() async {
-    await _api.delete('/users/me');
-  }
 }
 
 final careRepositoryPrv = Provider<CareRepository>(
   (ref) => CareRepository(ref.watch(apiClientPrv)),
 );
 
+/// The record number of the signed-in patient, or a message explaining why the
+/// hospital has not linked one yet.
+String _ownRecordNumber(Ref ref) {
+  final recordNumber = ref.watch(authStatePrv).patientId;
+  if (recordNumber.isEmpty) {
+    throw const ApiException(
+      code: 'NO_PATIENT_RECORD',
+      message: 'This login is not linked to a patient record yet. '
+          'Ask the hospital front desk to link it.',
+    );
+  }
+  return recordNumber;
+}
+
+String _ownRegistration(Ref ref) {
+  final registration = ref.watch(authStatePrv).doctorId;
+  if (registration.isEmpty) {
+    throw const ApiException(
+      code: 'NO_DOCTOR_RECORD',
+      message: 'This login is not linked to a doctor record yet. '
+          'Ask your hospital administrator to link it.',
+    );
+  }
+  return registration;
+}
+
 final doctorAppointmentsPrv = FutureProvider.autoDispose<List<Appointment>>((ref) {
-  return ref.watch(careRepositoryPrv).fetchDoctorAppointments(CareDemoIds.doctorId);
+  return ref.watch(careRepositoryPrv).fetchDoctorAppointments(_ownRegistration(ref));
 });
 
 final patientAppointmentsPrv = FutureProvider.autoDispose<List<Appointment>>((ref) {
-  return ref.watch(careRepositoryPrv).fetchPatientAppointments(CareDemoIds.patientId);
+  return ref.watch(careRepositoryPrv).fetchPatientAppointments(_ownRecordNumber(ref));
 });
 
 final patientsRegistryPrv = FutureProvider.autoDispose<List<PatientRecord>>((ref) {
   return ref.watch(careRepositoryPrv).fetchPatients();
 });
 
-final doctorSchedulePrv = FutureProvider.autoDispose<DoctorSchedule>((ref) {
-  return ref.watch(careRepositoryPrv).fetchSchedule(CareDemoIds.doctorId);
+final doctorsListPrv = FutureProvider.autoDispose<List<DoctorProfile>>((ref) {
+  return ref.watch(careRepositoryPrv).fetchDoctors();
 });
 
-final doctorProfilePrv = FutureProvider.autoDispose<DoctorProfile>((ref) {
-  return ref.watch(careRepositoryPrv).fetchDoctor(CareDemoIds.doctorId);
+/// The doctor record behind the signed-in doctor account.
+final doctorProfilePrv = FutureProvider.autoDispose<DoctorProfile>((ref) async {
+  final registration = _ownRegistration(ref);
+  final doctors = await ref.watch(careRepositoryPrv).fetchDoctors();
+  return doctors.firstWhere(
+    (doctor) => doctor.id == registration || doctor.registrationNumber == registration,
+    orElse: () => throw const ApiException(
+      code: 'DOCTOR_NOT_FOUND',
+      message: 'Your doctor record is no longer listed for this hospital.',
+    ),
+  );
 });
 
 final patientPrescriptionsPrv = FutureProvider.autoDispose<List<Prescription>>((ref) {
-  return ref.watch(careRepositoryPrv).fetchPatientPrescriptions(CareDemoIds.patientId);
+  return ref.watch(careRepositoryPrv).fetchPatientPrescriptions(_ownRecordNumber(ref));
 });
 
 final patientInvoicesPrv = FutureProvider.autoDispose<List<Invoice>>((ref) {
-  return ref.watch(careRepositoryPrv).fetchPatientInvoices(CareDemoIds.patientId);
+  return ref.watch(careRepositoryPrv).fetchPatientInvoices(_ownRecordNumber(ref));
 });
 
 final notificationsPrv = FutureProvider.autoDispose<List<AppNotification>>((ref) {
   return ref.watch(careRepositoryPrv).fetchNotifications();
-});
-
-final myProfilePrv = FutureProvider.autoDispose<UserProfile>((ref) {
-  return ref.watch(careRepositoryPrv).fetchMe();
 });

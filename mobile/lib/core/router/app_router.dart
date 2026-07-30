@@ -28,41 +28,13 @@ import '../../features/receptionist_app/appointments/reception_appointments_scre
 import '../../features/receptionist_app/billing/reception_billing_screen.dart';
 import '../../features/receptionist_app/more/reception_more_screen.dart';
 import '../../features/receptionist_app/patients/reception_patients_screen.dart';
+import '../auth/auth_controller.dart';
 
 /// Roles allowed into the staff-facing workspaces (/admin and /pharmacy).
 const inventoryRoles = ['hospital_admin', 'super_admin', 'pharmacist'];
 
 /// Full administrative access (hospital command center + staff management).
 const adminRoles = ['hospital_admin', 'super_admin'];
-
-class AuthUserState {
-  final bool isAuthenticated;
-  final String role; // patient | doctor | hospital_admin | pharmacist | receptionist
-  final String email;
-
-  const AuthUserState({
-    required this.isAuthenticated,
-    required this.role,
-    required this.email,
-  });
-}
-
-class AuthStateNotifier extends StateNotifier<AuthUserState> {
-  AuthStateNotifier()
-      : super(const AuthUserState(isAuthenticated: false, role: 'patient', email: ''));
-
-  void login(String role, String email) {
-    state = AuthUserState(isAuthenticated: true, role: role, email: email);
-  }
-
-  void logout() {
-    state = const AuthUserState(isAuthenticated: false, role: 'patient', email: '');
-  }
-}
-
-final authStatePrv = StateNotifierProvider<AuthStateNotifier, AuthUserState>((ref) {
-  return AuthStateNotifier();
-});
 
 String _homeFor(String role) {
   if (role == 'patient') return '/patient/home';

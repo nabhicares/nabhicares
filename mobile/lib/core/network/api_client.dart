@@ -7,14 +7,24 @@ import 'dio_client.dart';
 /// A response already unwrapped from the backend `{ success, data, meta }` envelope.
 class ApiResult {
   final dynamic data;
-  final Map<String, dynamic>? meta;
+  final Map<String, dynamic>? _meta;
 
-  const ApiResult(this.data, this.meta);
+  const ApiResult(this.data, this._meta);
 
-  List<Map<String, dynamic>> get list =>
-      (data as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+  /// Collection endpoints answer with a bare array, or with `{ items, meta }`
+  /// when they page.
+  List<Map<String, dynamic>> get list {
+    final payload = data is Map<String, dynamic> ? data['items'] : data;
+    return (payload as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+  }
 
   Map<String, dynamic> get map => (data as Map<String, dynamic>? ?? {});
+
+  Map<String, dynamic>? get meta {
+    if (_meta != null) return _meta;
+    final nested = data is Map<String, dynamic> ? data['meta'] : null;
+    return nested as Map<String, dynamic>?;
+  }
 }
 
 /// Thin wrapper over Dio that unwraps the response envelope and converts

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "177244651907",
+    "project_id": "nabhi-cares",
+    "storage_bucket": "nabhi-cares.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:177244651907:android:38b7b2dc3296e27bc636b6",
+        "android_client_info": {
+          "package_name": "com.nabhilabs.cares"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJPeld5pur59lnmrqs15W3CJPfg3PuuiE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

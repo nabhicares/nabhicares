@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/form_hint_box.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../../care/data/care_repository.dart';
@@ -51,21 +52,19 @@ class DoctorProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             _ProfileRow(label: 'Email', value: doctor.email),
+            _ProfileRow(label: 'Phone', value: doctor.phone.isEmpty ? '—' : doctor.phone),
             _ProfileRow(
               label: 'Consultation fee',
               value: formatCurrency(doctor.consultationFee),
             ),
             _ProfileRow(
-              label: 'Qualifications',
-              value: doctor.qualifications?.isNotEmpty == true
-                  ? doctor.qualifications!
-                  : 'Not listed',
+              label: 'Registration number',
+              value: doctor.registrationNumber.isEmpty ? '—' : doctor.registrationNumber,
             ),
-            _ProfileRow(label: 'Doctor ID', value: doctor.id),
             const SizedBox(height: 12),
             const FormHintBox(
-              message:
-                  'Profile editing is not exposed by the API yet. Contact an administrator to update specialty or fees.',
+              message: 'Your hospital administrator maintains these details. '
+                  'Ask them to update your specialty or consultation fee.',
             ),
           ],
         );
@@ -100,36 +99,6 @@ class _ProfileRow extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class FormHintBox extends StatelessWidget {
-  final String message;
-
-  const FormHintBox({super.key, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.4),
             ),
           ),
         ],

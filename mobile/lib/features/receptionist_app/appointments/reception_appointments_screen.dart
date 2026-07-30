@@ -73,7 +73,10 @@ class _ReceptionAppointmentsScreenState
               icon: Icons.medical_services_outlined,
             );
           }
-          final doctorId = _selectedDoctorId ?? doctors.first.id;
+          final doctorId = _selectedDoctorId ??
+              (doctors.first.registrationNumber.isNotEmpty
+                  ? doctors.first.registrationNumber
+                  : doctors.first.id);
           if (_selectedDoctorId == null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) setState(() => _selectedDoctorId = doctorId);
@@ -283,14 +286,14 @@ class _BookAppointmentSheetState extends ConsumerState<_BookAppointmentSheet> {
   late String _doctorId;
   DateTime _date = DateTime.now().add(const Duration(days: 1));
   String? _slot;
-  List<Map<String, dynamic>> _slots = const [];
+  List<String> _slots = const [];
   bool _loadingSlots = false;
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _patientId = widget.patients.first.id;
+    _patientId = widget.patients.first.bookingId;
     _doctorId = widget.initialDoctorId;
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSlots());
   }
@@ -309,7 +312,7 @@ class _BookAppointmentSheetState extends ConsumerState<_BookAppointmentSheet> {
     });
     try {
       final slots =
-          await ref.read(careRepositoryPrv).fetchDoctorSlots(_doctorId, _dateStr);
+          await ref.read(careRepositoryPrv).fetchFreeSlots(_doctorId, _dateStr);
       if (mounted) {
         setState(() {
           _slots = slots;
@@ -361,11 +364,7 @@ class _BookAppointmentSheetState extends ConsumerState<_BookAppointmentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final available = _slots
-        .where((s) => s['available'] == true)
-        .map((s) => s['time'] as String? ?? '')
-        .where((t) => t.isNotEmpty)
-        .toList();
+    final available = _slots;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -385,7 +384,16 @@ class _BookAppointmentSheetState extends ConsumerState<_BookAppointmentSheet> {
               value: _patientId,
               decoration: const InputDecoration(labelText: 'Patient'),
               items: widget.patients
-                  .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: p.bookingId,
+                      child: Text(
+                        p.medicalRecordNumber.isEmpty
+                            ? p.name
+                            : '${p.name} · ${p.medicalRecordNumber}',
+                      ),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _patientId = v ?? _patientId),
             ),
@@ -396,8 +404,12 @@ class _BookAppointmentSheetState extends ConsumerState<_BookAppointmentSheet> {
               items: widget.doctors
                   .map(
                     (d) => DropdownMenuItem(
-                      value: d.id,
-                      child: Text('${d.name} · ${d.specialty}'),
+                      value: d.registrationNumber.isNotEmpty
+                          ? d.registrationNumber
+                          : d.id,
+                      child: Text(
+                        '${d.name}${d.specialty.isEmpty ? '' : ' · ${d.specialty}'}',
+                      ),
                     ),
                   )
                   .toList(),

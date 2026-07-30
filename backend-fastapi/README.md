@@ -72,7 +72,7 @@ X-Bootstrap-Secret: <BOOTSTRAP_SECRET>
 { "hospital_name": "...", "hospital_code": "H1", "firebase_uid": "<uid>", "email": "..." }
 ```
 
-Hospital-scoped requests need `Authorization: Bearer <Firebase ID token>` and usually `X-Hospital-ID: <uuid>` (mock mode).
+Every request needs `Authorization: Bearer <Firebase ID token>`. The hospital, role and own-record ids all come from the user row that token resolves to, so no client sends them.
 
 ## Vercel (optional serverless)
 

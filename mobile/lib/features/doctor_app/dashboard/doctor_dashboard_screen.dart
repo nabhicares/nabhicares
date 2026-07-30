@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/router/app_router.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
-import '../hours/doctor_hours_screen.dart';
+import '../../../shared_models/appointment.dart';
+import '../../care/data/care_repository.dart';
 import '../../patient_app/notifications/notifications_hub_screen.dart';
 import '../patients/doctor_patients_screen.dart';
 import '../prescription_writer/write_prescription_screen.dart';
@@ -22,16 +23,21 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
   int _currentIndex = 0;
   DateTime? _lastBackPress;
 
+  String get _today {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final authUser = ref.watch(authStatePrv);
     final theme = Theme.of(context);
 
-    final List<Widget> screens = [
+    final screens = [
       _buildDashboard(authUser, theme),
       const DoctorQueueScreen(),
       const DoctorPatientsScreen(),
-      const DoctorHoursScreen(),
+      const WritePrescriptionScreen(),
       const DoctorProfileScreen(),
     ];
 
@@ -55,206 +61,190 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
         );
       },
       child: Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-              child: const Icon(Icons.medical_services, color: AppColors.primary),
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                child: const Icon(Icons.medical_services, color: AppColors.primary),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    authUser.hospitalName.isEmpty ? 'Nabhi Care' : authUser.hospitalName,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    authUser.shortName,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationsHubScreen()),
+              ),
             ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Good Morning,',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                Text(
-                  'Dr. Gregory House',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: AppColors.textPrimary),
+              onPressed: () => ref.read(authStatePrv.notifier).logout(),
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsHubScreen()),
+        body: screens[_currentIndex],
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) => setState(() => _currentIndex = index),
+          backgroundColor: Colors.white,
+          elevation: 8,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_customize_outlined),
+              selectedIcon: Icon(Icons.dashboard_customize, color: AppColors.primary),
+              label: 'Dashboard',
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppColors.textPrimary),
-            onPressed: () {
-              ref.read(authStatePrv.notifier).logout();
-            },
-          ),
-        ],
-      ),
-      body: screens[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
-        },
-        backgroundColor: Colors.white,
-        elevation: 8,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_customize_outlined),
-            selectedIcon: Icon(Icons.dashboard_customize, color: AppColors.primary),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_today_outlined),
-            selectedIcon: Icon(Icons.calendar_today, color: AppColors.primary),
-            label: 'Queue',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people, color: AppColors.primary),
-            label: 'Patients',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.schedule_outlined),
-            selectedIcon: Icon(Icons.schedule, color: AppColors.primary),
-            label: 'Hours',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: AppColors.primary),
-            label: 'Profile',
-          ),
-        ],
-      ),
+            NavigationDestination(
+              icon: Icon(Icons.calendar_today_outlined),
+              selectedIcon: Icon(Icons.calendar_today, color: AppColors.primary),
+              label: 'Queue',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.people_outline),
+              selectedIcon: Icon(Icons.people, color: AppColors.primary),
+              label: 'Patients',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.edit_note_outlined),
+              selectedIcon: Icon(Icons.edit_note, color: AppColors.primary),
+              label: 'Rx',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person, color: AppColors.primary),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDashboard(AuthUserState authUser, ThemeData theme) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Metrics Row
-          Row(
+    final appointmentsAsync = ref.watch(doctorAppointmentsPrv);
+
+    return appointmentsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(child: Text('$error')),
+      data: (appointments) {
+        final today = appointments.where((a) => a.date == _today).toList();
+        final open = today.where((a) => a.status != 'cancelled' && a.status != 'completed');
+        final completed = today.where((a) => a.status == 'completed');
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(doctorAppointmentsPrv);
+            await ref.read(doctorAppointmentsPrv.future);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(20),
             children: [
-              Expanded(
-                child: _buildMetricCard(
-                  'Appointments',
-                  '8',
-                  'Today\'s total queue',
-                  AppColors.primary,
-                  Icons.calendar_month,
-                  () => setState(() => _currentIndex = 1),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  'Pending Rx',
-                  '3',
-                  'Needs dispensation',
-                  AppColors.warning,
-                  Icons.medication,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const WritePrescriptionScreen()),
+              Row(
+                children: [
+                  Expanded(
+                    child: _metric(
+                      'Today',
+                      '${today.length}',
+                      'Scheduled visits',
+                      AppColors.primary,
+                      Icons.calendar_month,
+                      () => setState(() => _currentIndex = 1),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _metric(
+                      'Waiting',
+                      '${open.length}',
+                      'Still to see',
+                      AppColors.warning,
+                      Icons.hourglass_top_rounded,
+                      () => setState(() => _currentIndex = 1),
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _metric(
+                      'Done',
+                      '${completed.length}',
+                      'Completed today',
+                      AppColors.success,
+                      Icons.check_circle_outline,
+                      () => setState(() => _currentIndex = 1),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _metric(
+                      'Write Rx',
+                      '→',
+                      'Open prescription pad',
+                      AppColors.secondary,
+                      Icons.edit_note,
+                      () => setState(() => _currentIndex = 3),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Today's queue",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _currentIndex = 1),
+                    child: const Text('Full calendar'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (today.isEmpty)
+                const AppCard(child: Text('No visits scheduled for today.'))
+              else
+                for (final appointment in today.take(5))
+                  _queueRow(appointment),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildMetricCard(
-                  'Admitted',
-                  '5',
-                  'In-patient logs',
-                  AppColors.success,
-                  Icons.airline_seat_flat_angled_rounded,
-                  () => setState(() => _currentIndex = 2),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildMetricCard(
-                  'Consult Fee',
-                  '₹1,200',
-                  'Accrued revenue',
-                  AppColors.secondary,
-                  Icons.account_balance_wallet,
-                  () => setState(() => _currentIndex = 4),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          // Active Patient Queue
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Active Patient Queue',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _currentIndex = 1),
-                child: const Text('View Full Calendar'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Timeline Appointments
-          _buildAppointmentTimelineItem(
-            '10:30 AM',
-            'Alice Patient',
-            'Female, 33 yrs',
-            'Severe Migraine, nausea, sensitivity to light',
-            'Active',
-            true,
-          ),
-          _buildAppointmentTimelineItem(
-            '11:00 AM',
-            'Bob Smith',
-            'Male, 45 yrs',
-            'Routine diabetic screening review',
-            'Waiting',
-            false,
-          ),
-          _buildAppointmentTimelineItem(
-            '11:30 AM',
-            'Charlie Davis',
-            'Male, 28 yrs',
-            'Post-op dressing review for leg fracture',
-            'Waiting',
-            false,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildMetricCard(
+  Widget _metric(
     String title,
     String value,
     String caption,
@@ -284,7 +274,7 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
           const SizedBox(height: 12),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -293,55 +283,27 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
           const SizedBox(height: 4),
           Text(
             caption,
-            style: const TextStyle(
-              fontSize: 10,
-              color: AppColors.textMuted,
-            ),
+            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAppointmentTimelineItem(
-    String time,
-    String name,
-    String details,
-    String symptoms,
-    String status,
-    bool isActive,
-  ) {
+  Widget _queueRow(Appointment appointment) {
+    final active = appointment.status != 'cancelled' && appointment.status != 'completed';
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       child: AppCard(
         onTap: () => setState(() => _currentIndex = 1),
-        backgroundColor: isActive ? Colors.blue.shade50.withOpacity(0.5) : Colors.white,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              children: [
-                Text(
-                  time,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isActive ? AppColors.success.withOpacity(0.12) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(
-                      color: isActive ? AppColors.success : AppColors.textSecondary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              appointment.timeSlot,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -349,45 +311,34 @@ class _DoctorDashboardScreenState extends ConsumerState<DoctorDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                    appointment.patientName.isEmpty ? 'Patient' : appointment.patientName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    details,
-                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Notes: $symptoms',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  if (isActive) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const WritePrescriptionScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text('Start Visit', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
+                    appointment.status.replaceAll('_', ' '),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: active ? AppColors.textSecondary : AppColors.textMuted,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
+            if (active)
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => WritePrescriptionScreen(
+                        patientId: appointment.patientId,
+                        patientName: appointment.patientName,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Write Rx'),
+              ),
           ],
         ),
       ),

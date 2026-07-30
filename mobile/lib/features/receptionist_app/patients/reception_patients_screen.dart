@@ -153,7 +153,7 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
   late final TextEditingController _email;
   late final TextEditingController _phone;
   late final TextEditingController _dob;
-  late final TextEditingController _allergies;
+  late final TextEditingController _bloodGroup;
   String _gender = 'Female';
   bool _saving = false;
 
@@ -165,7 +165,7 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
     _email = TextEditingController(text: e?.email ?? '');
     _phone = TextEditingController(text: e?.phone ?? '');
     _dob = TextEditingController(text: e?.dateOfBirth ?? '');
-    _allergies = TextEditingController(text: e?.allergies.join(', ') ?? '');
+    _bloodGroup = TextEditingController(text: e?.bloodGroup ?? '');
     _gender = e?.gender.isNotEmpty == true ? e!.gender : 'Female';
   }
 
@@ -175,7 +175,7 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
     _email.dispose();
     _phone.dispose();
     _dob.dispose();
-    _allergies.dispose();
+    _bloodGroup.dispose();
     super.dispose();
   }
 
@@ -185,15 +185,11 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
     try {
       final body = <String, dynamic>{
         'name': _name.text.trim(),
-        'email': _email.text.trim(),
-        'phone': _phone.text.trim(),
-        'dateOfBirth': _dob.text.trim(),
+        if (_email.text.trim().isNotEmpty) 'email': _email.text.trim(),
+        if (_phone.text.trim().isNotEmpty) 'phone': _phone.text.trim(),
+        if (_dob.text.trim().isNotEmpty) 'dateOfBirth': _dob.text.trim(),
         'gender': _gender,
-        'allergies': _allergies.text
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList(),
+        if (_bloodGroup.text.trim().isNotEmpty) 'bloodGroup': _bloodGroup.text.trim(),
       };
       final repo = ref.read(careRepositoryPrv);
       if (widget.existing == null) {
@@ -230,21 +226,15 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
             ),
             const SizedBox(height: 12),
             TextFormField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                if (!v.contains('@')) return 'Enter a valid email';
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: 'Phone'),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -253,7 +243,6 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
                 labelText: 'Date of birth',
                 hintText: 'YYYY-MM-DD',
               ),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -268,19 +257,17 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
             ),
             const SizedBox(height: 12),
             TextFormField(
-              controller: _allergies,
+              controller: _bloodGroup,
               decoration: const InputDecoration(
-                labelText: 'Allergies (comma-separated)',
-                hintText: 'Penicillin, Peanuts',
+                labelText: 'Blood group',
+                hintText: 'A+',
               ),
             ),
-            if (isEdit) ...[
+            if (isEdit && widget.existing!.medicalRecordNumber.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                children: [
-                  StatusChip(label: 'ID ${widget.existing!.id}', tone: StatusTone.neutral),
-                ],
+              StatusChip(
+                label: 'MRN ${widget.existing!.medicalRecordNumber}',
+                tone: StatusTone.info,
               ),
             ],
             const SizedBox(height: 24),

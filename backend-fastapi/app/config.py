@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     firebase_client_email: str
     firebase_private_key: str
     cloudinary_url: str
-    allow_mock_auth: bool = False
     bootstrap_secret: str
 
     @field_validator("database_url")

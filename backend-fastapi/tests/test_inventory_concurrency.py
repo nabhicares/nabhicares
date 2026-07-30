@@ -14,11 +14,11 @@ os.environ.setdefault("FIREBASE_CLIENT_EMAIL", "test@example.invalid")
 os.environ.setdefault("FIREBASE_PRIVATE_KEY", "test")
 os.environ.setdefault("CLOUDINARY_URL", "cloudinary://key:secret@cloud")
 os.environ.setdefault("BOOTSTRAP_SECRET", "12345678901234567890123456789012")
-os.environ.setdefault("ALLOW_MOCK_AUTH", "true")
 
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, text
 
+from app.auth import CurrentUser, get_current_user
 from app.db import SessionLocal
 from app.main import app
 from app.models import (
@@ -32,6 +32,21 @@ from app.models import (
     Stock,
     StockTransaction,
 )
+
+
+def as_pharmacist(hospital_id: uuid.UUID):
+    """Stand in for a verified Firebase caller.
+
+    The app has no auth bypass to borrow, so the test overrides the dependency
+    instead — the routers under test are what we want to exercise anyway.
+    """
+    return lambda: CurrentUser(
+        id=None,
+        firebase_uid="test-pharmacist",
+        role="pharmacist",
+        hospital_id=hospital_id,
+        email="pharmacist@test.invalid",
+    )
 
 
 @pytest.mark.asyncio
@@ -51,10 +66,8 @@ async def test_concurrent_sales_cannot_oversell():
         )
         await session.commit()
 
-    headers = {
-        "Authorization": "Bearer mock-pharmacist",
-        "X-Hospital-ID": str(hospital_id),
-    }
+    app.dependency_overrides[get_current_user] = as_pharmacist(hospital_id)
+    headers = {"Authorization": "Bearer test"}
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -92,6 +105,7 @@ async def test_concurrent_sales_cannot_oversell():
             )
             assert sorted((first.status_code, second.status_code)) == [201, 409]
     finally:
+        app.dependency_overrides.clear()
         async with SessionLocal() as session:
             await session.execute(text("SELECT set_config('app.is_super_admin', 'true', true)"))
             sale_ids = list(

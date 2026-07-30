@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import firebase_admin
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth, credentials
 from sqlalchemy import select, text
@@ -45,46 +45,16 @@ def firebase_app() -> firebase_admin.App:
 async def get_current_user(
     token: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    x_hospital_id: Annotated[str | None, Header()] = None,
 ) -> CurrentUser:
+    """Resolve the caller from a Firebase ID token.
+
+    A verified signature is the only accepted proof of identity: role and tenant
+    come from the hospital's own user record, so a client cannot ask for either.
+    """
     if token is None:
         raise HTTPException(401, "Authorization header is missing")
 
     raw = token.credentials
-    if settings.allow_mock_auth and raw.startswith("mock-"):
-        role = raw.removeprefix("mock-").split("-", 1)[0]
-        if role == "hospital":
-            role = "hospital_admin"
-        if role not in {
-            "super_admin",
-            "hospital_admin",
-            "doctor",
-            "receptionist",
-            "pharmacist",
-            "patient",
-        }:
-            raise HTTPException(401, "Unknown mock role")
-        hospital_id = None
-        if role != "super_admin":
-            if x_hospital_id:
-                try:
-                    hospital_id = uuid.UUID(x_hospital_id)
-                except ValueError as exc:
-                    raise HTTPException(400, "X-Hospital-ID must be a UUID") from exc
-            else:
-                # Demo clients (web/mobile) often omit the header — fall back to the seeded DEMO hospital.
-                from .models import Hospital
-
-                hospital_id = await session.scalar(
-                    select(Hospital.id).where(Hospital.code == "DEMO", Hospital.deleted_at.is_(None))
-                )
-                if hospital_id is None:
-                    raise HTTPException(
-                        400,
-                        "X-Hospital-ID is required (or seed the DEMO hospital first)",
-                    )
-        return CurrentUser(None, raw, role, hospital_id, None)
-
     try:
         # check_revoked hits Google on every request. On a serverless cold start that call
         # often times out and every portal page then looks like a bad password, so signature

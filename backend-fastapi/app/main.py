@@ -60,7 +60,7 @@ app.add_middleware(
     allow_origins=settings.origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Hospital-ID", "X-Bootstrap-Secret"],
+    allow_headers=["Authorization", "Content-Type", "X-Bootstrap-Secret"],
 )
 
 for api_router in (

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/router/app_router.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../../core/providers/settings_provider.dart';
 import '../../../shared_models/appointment.dart';
+import '../../../shared_models/doctor_profile.dart';
 import '../../care/data/care_repository.dart';
 import '../appointment_booking/booking_screen.dart';
 import '../appointments/patient_appointments_screen.dart';
@@ -32,13 +32,8 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   Widget build(BuildContext context) {
     final authUser = ref.watch(authStatePrv);
     final theme = Theme.of(context);
-    final settingsAsync = ref.watch(settingsProvider);
-    
-    final hospitalName = settingsAsync.when(
-      data: (data) => data['hospitalName'] as String? ?? 'Pharma Store General Hospital',
-      loading: () => 'Loading...',
-      error: (_, __) => 'Pharma Store General Hospital',
-    );
+    final hospitalName =
+        authUser.hospitalName.isEmpty ? 'Nabhi Care' : authUser.hospitalName;
 
     final List<Widget> screens = [
       _buildDashboard(authUser, theme, hospitalName),
@@ -89,7 +84,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                   ),
                 ),
                 Text(
-                  authUser.email.split('@').first,
+                  authUser.shortName,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
@@ -155,7 +150,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
   }
 
   Widget _buildDashboard(AuthUserState authUser, ThemeData theme, String hospitalName) {
-    final doctorsAsync = ref.watch(doctorsListProvider);
+    final doctorsAsync = ref.watch(doctorsListPrv);
     final appointmentsAsync = ref.watch(patientAppointmentsPrv);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
@@ -206,10 +201,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               height: 120,
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (_, __) => const Text('Could not load upcoming appointment'),
+            error: (error, __) => AppCard(child: Text('$error')),
             data: (appointments) {
               final upcoming = appointments
-                  .where((a) => a.status == 'booked')
+                  .where((a) => a.status != 'cancelled' && a.status != 'completed')
                   .toList()
                 ..sort((a, b) =>
                     '${a.date}${a.timeSlot}'.compareTo('${b.date}${b.timeSlot}'));
@@ -313,7 +308,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             height: 160,
             child: doctorsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const Center(child: Text('Could not load doctors')),
+              error: (error, __) => Center(child: Text('$error')),
               data: (doctors) => doctors.isEmpty
                   ? const Center(child: Text('No doctors available'))
                   : ListView(
@@ -370,7 +365,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  Widget _buildDoctorCard(DoctorProfileModel doctor) {
+  Widget _buildDoctorCard(DoctorProfile doctor) {
     return Container(
       width: 220,
       margin: const EdgeInsets.only(right: 16),
@@ -383,7 +378,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                   child: const Icon(Icons.person, color: AppColors.primary),
                 ),
                 const SizedBox(width: 12),
@@ -397,8 +392,9 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        doctor.specialty,
+                        doctor.specialty.isEmpty ? 'General medicine' : doctor.specialty,
                         style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -410,19 +406,12 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
               'Consultation ${formatCurrency(doctor.consultationFee)}',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.star, color: AppColors.warning, size: 14),
-                const SizedBox(width: 4),
-                Text(
-                  '4.9',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => _bookDoctor(doctor),
-                  child: const Text(
+            const Spacer(),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _bookDoctor(doctor),
+                child: const Text(
                   'Book Now',
                   style: TextStyle(
                     color: AppColors.primary,
@@ -430,8 +419,7 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
                     fontSize: 12,
                   ),
                 ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -439,17 +427,10 @@ class _PatientHomeScreenState extends ConsumerState<PatientHomeScreen> {
     );
   }
 
-  void _bookDoctor(DoctorProfileModel doctor) {
+  void _bookDoctor(DoctorProfile doctor) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => BookingScreen(
-          doctorId: doctor.id,
-          doctorName: doctor.name,
-          specialty: doctor.specialty,
-          fee: doctor.consultationFee,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => BookingScreen(doctor: doctor)),
     );
   }
 }

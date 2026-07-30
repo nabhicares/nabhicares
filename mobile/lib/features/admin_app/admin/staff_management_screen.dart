@@ -280,7 +280,7 @@ class _AssignRoleSheetState extends ConsumerState<_AssignRoleSheet> {
             controller: _uidController,
             decoration: InputDecoration(
               labelText: 'User UID',
-              hintText: 'e.g. mock-uid-doctor',
+              hintText: 'Firebase Auth UID from the Firebase console',
               prefixIcon: const Icon(Icons.person_outline, size: 20),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),

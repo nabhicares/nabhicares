@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/router/app_router.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/loading_indicator.dart';
+import '../../../core/widgets/form_hint_box.dart';
 import '../../../core/widgets/status_chip.dart';
-import '../../care/data/care_repository.dart';
-import '../../doctor_app/profile/doctor_profile_screen.dart';
 
 class PatientProfileScreen extends ConsumerWidget {
   const PatientProfileScreen({super.key});
@@ -14,98 +12,7 @@ class PatientProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authStatePrv);
-    final profileAsync = ref.watch(myProfilePrv);
 
-    return profileAsync.when(
-      loading: () => const LoadingIndicator(message: 'Loading profile...'),
-      error: (error, _) {
-        // Mock tokens often have no Firestore user doc — fall back to session info.
-        return _ProfileBody(
-          name: auth.email.split('@').first,
-          email: auth.email,
-          phone: '—',
-          role: auth.role,
-          status: 'active',
-          uid: 'session',
-          onSignOut: () => ref.read(authStatePrv.notifier).logout(),
-          onDeleteAccount: () => _confirmDelete(context, ref),
-        );
-      },
-      data: (profile) => _ProfileBody(
-        name: profile.name.isEmpty ? auth.email.split('@').first : profile.name,
-        email: profile.email.isEmpty ? auth.email : profile.email,
-        phone: profile.phone.isEmpty ? '—' : profile.phone,
-        role: profile.role,
-        status: profile.status,
-        uid: profile.uid,
-        onSignOut: () => ref.read(authStatePrv.notifier).logout(),
-        onDeleteAccount: () => _confirmDelete(context, ref),
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete account?'),
-        content: const Text(
-          'This permanently anonymizes your name, email, phone, clinical history, '
-          'and notifications. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.critical),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-
-    try {
-      await ref.read(careRepositoryPrv).deleteMyAccount();
-      ref.read(authStatePrv.notifier).logout();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account deleted. Personal data anonymized.')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not delete account: $e')),
-        );
-      }
-    }
-  }
-}
-
-class _ProfileBody extends StatelessWidget {
-  final String name;
-  final String email;
-  final String phone;
-  final String role;
-  final String status;
-  final String uid;
-  final VoidCallback onSignOut;
-  final VoidCallback onDeleteAccount;
-
-  const _ProfileBody({
-    required this.name,
-    required this.email,
-    required this.phone,
-    required this.role,
-    required this.status,
-    required this.uid,
-    required this.onSignOut,
-    required this.onDeleteAccount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
@@ -122,7 +29,7 @@ class _ProfileBody extends StatelessWidget {
                 radius: 36,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                 child: Text(
-                  name.isEmpty ? '?' : name[0].toUpperCase(),
+                  auth.shortName.isEmpty ? '?' : auth.shortName[0].toUpperCase(),
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -131,40 +38,29 @@ class _ProfileBody extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(name, style: Theme.of(context).textTheme.headlineSmall),
+              Text(auth.shortName, style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 6),
-              StatusChip(label: role.replaceAll('_', ' '), tone: StatusTone.info),
+              StatusChip(label: auth.role.replaceAll('_', ' '), tone: StatusTone.info),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        _row('Email', email),
-        _row('Phone', phone),
-        _row('Status', status),
+        _row('Email', auth.email),
+        _row('Hospital', auth.hospitalName.isEmpty ? '—' : auth.hospitalName),
+        _row('Record number', auth.patientId.isEmpty ? 'Not linked' : auth.patientId),
         const SizedBox(height: 12),
         const FormHintBox(
-          message:
-              'You can delete your account below. Passwords are never stored in this app — '
-              'they are handled only by Firebase Auth when real login is enabled.',
+          message: 'Your hospital keeps these details. Ask the front desk to correct a '
+              'name, phone number or record number, or to close your account.',
         ),
         const SizedBox(height: 20),
         OutlinedButton.icon(
-          onPressed: onSignOut,
+          onPressed: () => ref.read(authStatePrv.notifier).logout(),
           icon: const Icon(Icons.logout_rounded, size: 18),
           label: const Text('Sign out'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.critical,
             side: const BorderSide(color: AppColors.critical),
-            minimumSize: const Size(double.infinity, 48),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextButton.icon(
-          onPressed: onDeleteAccount,
-          icon: const Icon(Icons.delete_forever_rounded, size: 18),
-          label: const Text('Delete my account'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.critical,
             minimumSize: const Size(double.infinity, 48),
           ),
         ),

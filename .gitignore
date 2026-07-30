@@ -49,4 +49,6 @@ android/key.properties
 firebase-service-account.json
 *firebase-adminsdk*.json
 **/google-services.json
+# Public client identifiers, and the Android build needs them to be present.
+!mobile/android/app/google-services.json
 **/GoogleService-Info.plist
